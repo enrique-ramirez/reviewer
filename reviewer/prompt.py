@@ -4,7 +4,8 @@ The system prompt is your ``personality/`` files concatenated in the order the
 repo config lists them, with the output contract always appended last, plus the
 language instruction.
 
-The repository's own ``CLAUDE.md`` is read from the **default branch** and
+The repository's own agent docs — ``AGENTS.md``, ``CLAUDE.md``, whatever
+``repo_context.paths`` matches — are read from the **default branch** and
 injected inside ``<repo_context>`` as reference material. Reading it from the PR
 branch would let a pull request ship instructions to the reviewer that is about
 to decide whether to approve it — which is a short path from "opens a PR" to
@@ -227,11 +228,11 @@ def build_review_user_prompt(
     if checkout_path is not None:
         sections.append(
             "## Codebase access\n\n"
-            f"A checkout of this PR's head commit is at `{checkout_path}`. Use "
-            "Read, Glob, and Grep there to check how surrounding code does the "
-            "same thing before deciding whether something departs from the "
-            "repository's conventions. Reach for it when a judgement depends on "
-            "code the diff does not show."
+            f"A checkout of this PR's head commit is at `{checkout_path}`. Read "
+            "and search it to check how surrounding code does the same thing "
+            "before deciding whether something departs from the repository's "
+            "conventions. Reach for it when a judgement depends on code the "
+            "diff does not show."
         )
 
     sections.append(f"## Diff\n\n{render_diff(bundle)}")

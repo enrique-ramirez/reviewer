@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import claude, log
+from . import log, model
 
 MAX_BODY_CHARS = 2000
 MAX_FILES = 40
@@ -120,8 +120,8 @@ def describe(
     """
     prompt = build_prompt(repo, pull, review_summary=review_summary, files=files)
     try:
-        result = claude.run(cfg, system_prompt=SYSTEM, user_prompt=prompt)
-    except claude.ClaudeError as exc:
+        result = model.run(cfg, system_prompt=SYSTEM, user_prompt=prompt)
+    except model.ModelError as exc:
         log.get().warning(
             "%s#%s: could not summarise the merge: %s", repo, pull.get("number"), exc
         )
@@ -135,21 +135,3 @@ def describe(
     if len(text) > MAX_DESCRIPTION_CHARS:
         text = text[: MAX_DESCRIPTION_CHARS - 1].rstrip() + "…"
     return text
-
-
-def model_config(
-    global_claude: dict[str, Any], settings: dict[str, Any]
-) -> dict[str, Any]:
-    """The claude config for a summary call, derived from the review one.
-
-    Tools are dropped and no directory is added, so the call has nothing to read
-    and nothing to reach. The timeout is much shorter than a review's: this is a
-    small prompt, and one that hangs should be abandoned rather than holding up
-    the tick behind it.
-    """
-    cfg = dict(global_claude)
-    cfg["allowed_tools"] = []
-    cfg["timeout_seconds"] = int(settings.get("timeout_seconds") or 180)
-    if settings.get("model"):
-        cfg["model"] = settings["model"]
-    return cfg

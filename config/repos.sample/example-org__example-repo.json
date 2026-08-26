@@ -38,6 +38,34 @@
   "agent_language": null,
   "$comment_agent_language": "Language for the copy-paste agent block. null means: same as 'language'.",
 
+  "model": {
+    "$comment": [
+      "Which model reviews this repository. An empty block means: whatever",
+      "global.json says, which is the right answer for most repos.",
+      "",
+      "'provider' names an entry from global.providers — 'claude', 'codex',",
+      "'gemini', or a profile you defined there. Every other key is layered",
+      "over that entry, so pinning only the model is one line and leaves the",
+      "command, tools and timeout alone:",
+      "",
+      "  \"model\": { \"model\": \"claude-sonnet-5\" }",
+      "",
+      "Both together, for a repo you would rather review somewhere else:",
+      "",
+      "  \"model\": { \"provider\": \"codex\", \"model\": \"gpt-5.1-codex\" }",
+      "",
+      "A null is 'inherit', not 'unset' — to go back to the CLI's own default",
+      "model on a repo where global.json pinned one, remove the pin globally",
+      "or add a provider profile without it. Merge summaries for this repo",
+      "follow whatever is chosen here, unless global.merge_summary names its",
+      "own provider."
+    ],
+
+    "provider": null,
+    "model": null,
+    "timeout_seconds": null
+  },
+
   "gates": {
     "$comment": "A PR is reviewed when every enabled gate passes. Set any to false to switch it off for this repo.",
 
@@ -163,7 +191,7 @@
       "Conventions specific to this repository go in a markdown file sitting next",
       "to this one — same name, .md instead of .json. It is picked up",
       "automatically; there is no key for it.",
-      "Prefer writing conventions in the repository itself (CLAUDE.md and friends,",
+      "Prefer writing conventions in the repository itself (AGENTS.md and friends,",
       "read below) so they stay current for everyone. Use the notes file for what",
       "belongs to the reviewer rather than the team."
     ],
@@ -172,14 +200,21 @@
       "enabled": true,
       "from_ref": "default_branch",
       "$comment_from_ref": [
-        "Where to read the target repo's own CLAUDE.md / .claude/*.md from.",
+        "Where to read the target repo's own agent docs from.",
         "'default_branch' reads code that has already been reviewed. Reading it",
         "from the PR branch would let a PR ship instructions to its own",
         "reviewer, which matters because this tool can approve.",
         "A PR that modifies these files is surfaced as a finding."
       ],
-      "paths": ["CLAUDE.md", ".claude/*.md"],
-      "$comment_paths": ".claude/skills/** is left out on purpose — those are workflow skills for building in the repo, not for reviewing it.",
+      "paths": ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".claude/*.md"],
+      "$comment_paths": [
+        "The team's own conventions, whichever agent they wrote them for — this",
+        "has nothing to do with which provider does the reviewing. Trim the list",
+        "if your repos only ever use one of them; a repo where CLAUDE.md is a",
+        "symlink to AGENTS.md costs a few wasted characters, not a wrong review.",
+        ".claude/skills/** is left out on purpose — those are workflow skills for",
+        "building in the repo, not for reviewing it."
+      ],
       "max_chars": 20000
     },
 

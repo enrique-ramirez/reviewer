@@ -16,7 +16,7 @@ from pathlib import Path
 from types import FrameType
 from typing import Any
 
-from . import backfill, claude, identity, log, notify, state, worktree
+from . import backfill, identity, log, model, notify, state, worktree
 from .config import ConfigError, GlobalConfig, RepoConfig, load_env, load_repos
 from .gh import GraphQLClient, RestClient
 from .log import DebugSink
@@ -32,7 +32,7 @@ def _handle_signal(signum: int, _frame: FrameType | None) -> None:
     # Whatever the model is working on is abandoned rather than finished: the
     # code that would post its review is on its way out, so letting it run to
     # completion would buy the bill and nothing else.
-    stopped = claude.terminate_all()
+    stopped = model.terminate_all()
     log.get().info(
         "signal %s received — stopping%s",
         signum,
@@ -482,7 +482,7 @@ def _run_with_tui(
         # inside a model call that will not return for minutes, and the join
         # would time out and leave the child running as an orphan. Killing it
         # first means the thread comes back promptly and with nothing to post.
-        stopped = claude.terminate_all()
+        stopped = model.terminate_all()
         if stopped:
             logger.info("stopped %d model call(s) in flight", stopped)
         ui_store.close()

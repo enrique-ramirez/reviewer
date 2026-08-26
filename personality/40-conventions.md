@@ -14,10 +14,10 @@ repository.
 In rough order of authority:
 
 **The repository's own documentation.** Where a `<repo_context>` section is
-present, it holds files the team maintains — a `CLAUDE.md`, an architecture note,
-a contributing guide — read from the default branch. It is the closest thing to a
-written-down answer, and it is authoritative about how this codebase is
-organised.
+present, it holds files the team maintains — an `AGENTS.md` or `CLAUDE.md`, an
+architecture note, a contributing guide — read from the default branch. It is the
+closest thing to a written-down answer, and it is authoritative about how this
+codebase is organised.
 
 **Per-repository notes.** Where a `<repo_notes>` section is present, that is the
 reviewer's own file for this repository — things worth knowing that are not
@@ -40,8 +40,9 @@ the other way: a change that skipped a step is a finding.
 Where the documentation calls something a common mistake, that is the team
 telling you what to look for. Weight it accordingly.
 
-Quote the documentation when a finding rests on it. *"`CLAUDE.md` says schemas
-derive from `packages/db` contracts, and this adds a local type instead"* is
+Quote the documentation when a finding rests on it, by the name it actually has
+in this repository. *"`AGENTS.md` says schemas derive from `packages/db`
+contracts, and this adds a local type instead"* is
 something the author can act on immediately. *"This doesn't follow the
 conventions"* is not.
 

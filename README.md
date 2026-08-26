@@ -15,16 +15,18 @@ a tool you leave open all day. It may as well be nice to look at.
 
 ## What it is
 
-A Python TUI wrapped around the `claude` CLI. It watches pull requests, decides
+A Python TUI wrapped around a coding-agent CLI. It watches pull requests, decides
 which ones are worth a model call, sends a compressed diff, and posts the result
 as a real GitHub review — inline comments, a summary, and a collapsible **Prompt
 for AI agents** block your teammates can paste straight into their own agent.
 
-You need Python 3.10+, `git`, a GitHub fine-grained token, and the `claude` CLI
-signed in. That is the whole list — the reviewer itself is standard library
-only, and `./run.sh` puts the dashboard's one dependency in a project-local
-`.venv` the first time you run it. Reviews go through your Claude subscription
-rather than a metered API key, so a review costs quota, not dollars.
+You need Python 3.10+, `git`, a GitHub fine-grained token, and one coding-agent
+CLI signed in — `claude`, `codex` or `gemini`, whichever you already have, or
+anything else that takes a prompt on stdin. That is the whole list: the reviewer
+itself is standard library only, and `./run.sh` puts the dashboard's one
+dependency in a project-local `.venv` the first time you run it. Reviews go
+through that CLI's subscription rather than a metered API key, so a review costs
+quota, not dollars.
 
 ## Why it exists
 
@@ -59,11 +61,14 @@ time; everything else already has a sensible default.
 ## What it will not do
 
 The token is `Contents: Read-only`, so it cannot push a commit, create a branch,
-or merge anything, whatever else goes wrong. The model gets `Read`, `Glob` and
-`Grep` over a clean, detached checkout and nothing else — no shell, no network,
-no GitHub token, no sight of your working copy. Everything that touches GitHub is
-done by the script, from JSON the script validated first, including checking that
-every comment line actually exists in the diff.
+or merge anything, whatever else goes wrong. The model gets read-only access to a
+clean, detached checkout and nothing else — no writes, no network, no GitHub
+token, no sight of your working copy. Exactly how that read access is fenced off
+depends on which CLI you point it at, and
+[FEATURES.md](FEATURES.md#which-model-reviews) says plainly what moves when you
+switch. Everything that touches GitHub is done by the script, from JSON the
+script validated first, including checking that every comment line actually
+exists in the diff.
 
 It can approve, because a review that can never unblock a merge is not doing the
 job. If you would rather watch it for a week first, set `approval.mode` to
@@ -72,8 +77,9 @@ job. If you would rather watch it for a week first, set `approval.mode` to
 ## More
 
 **[FEATURES.md](FEATURES.md)** — the dashboard, the three tabs, watching several
-repositories, filling in history, what gets sent to the model, token scoping, the
-full config reference, and every flag.
+repositories, filling in history, what gets sent to the model, choosing a
+provider and pinning a different one per repository, token scoping, the full
+config reference, and every flag.
 
 ## License
 

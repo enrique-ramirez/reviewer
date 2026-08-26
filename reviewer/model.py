@@ -1,15 +1,21 @@
 """Calling the model.
 
 The model is invoked as a pure function: text in, JSON out. It gets read-only
-tools scoped to a clean checkout of the PR head so it can look at surrounding
-code, and nothing else — no ``Bash``, no ``Write``, no network, and no GitHub
-token anywhere in its environment.
+access to a clean checkout of the PR head so it can look at surrounding code,
+and nothing else — no shell it can write with, no network, and no GitHub token
+anywhere in its environment.
 
 Its working directory is a neutral empty scratch dir rather than the checkout.
-That matters: Claude Code auto-loads ``CLAUDE.md`` from its working directory, so
-running it inside the PR's tree would let a pull request feed instructions to its
-own reviewer. Repo context is read from the default branch and injected as
-delimited data instead (see ``prompt.py``).
+That matters: every one of these CLIs auto-loads instructions from the directory
+it starts in — ``CLAUDE.md``, ``AGENTS.md``, ``GEMINI.md`` — so running one
+inside the PR's tree would let a pull request feed instructions to its own
+reviewer. Repo context is read from the default branch and injected as delimited
+data instead (see ``prompt.py``).
+
+Which CLI actually runs is a config question, answered in ``providers.py``.
+Everything in this module is true whichever one it is: one process, one prompt
+on stdin, one JSON object back, and a handle held so the call can be stopped
+when the tool quits.
 """
 
 from __future__ import annotations
@@ -25,27 +31,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import log
+from . import log, providers
 
 FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
-
-BLOCKED_TOOLS = [
-    "Bash",
-    "Write",
-    "Edit",
-    "MultiEdit",
-    "NotebookEdit",
-    "WebFetch",
-    "WebSearch",
-    "Task",
-]
 
 # Anything in this list is stripped from the child environment. The token is the
 # one that matters; the rest is hygiene.
 SENSITIVE_ENV = ("GITHUB_TOKEN", "GH_TOKEN", "GITHUB_API_URL", "GITHUB_GRAPHQL_URL")
 
 
-class ClaudeError(RuntimeError):
+class ModelError(RuntimeError):
     pass
 
 
@@ -73,9 +68,9 @@ def _forget(proc: subprocess.Popen) -> None:
 def stop_process(proc: subprocess.Popen, grace: float = 5.0) -> None:
     """End one model call, and anything it started.
 
-    Signals the process group rather than the process: the CLI runs children of
-    its own, and terminating only the parent would leave those behind — exactly
-    the problem this exists to solve.
+    Signals the process group rather than the process: these CLIs run children
+    of their own, and terminating only the parent would leave those behind —
+    exactly the problem this exists to solve.
     """
     if proc.poll() is not None:
         return
@@ -126,7 +121,7 @@ def live_count() -> int:
     """Model calls running right now, across every thread.
 
     Covers reviews, thread replies and merge summaries alike — anything that
-    reached the CLI — so a quit confirmation can say what it is about to end
+    reached a CLI — so a quit confirmation can say what it is about to end
     without each caller having to register itself separately.
     """
     with _live_lock:
@@ -144,31 +139,7 @@ class ModelResult:
     raw: str
     usage: dict[str, Any]
     duration_seconds: float
-
-
-def _build_command(cfg: dict[str, Any], system_prompt: str, add_dir: Path | None) -> list[str]:
-    # An explicit empty list means "no tools", which is what the merge summary
-    # wants; only an absent or null setting falls back to the read-only default.
-    allowed = cfg.get("allowed_tools")
-    if allowed is None:
-        allowed = ["Read", "Glob", "Grep"]
-    cmd = [
-        cfg.get("command", "claude"),
-        "-p",
-        "--output-format",
-        "json",
-        "--append-system-prompt",
-        system_prompt,
-    ]
-    if allowed:
-        cmd += ["--allowedTools", ",".join(allowed)]
-    cmd += ["--disallowedTools", ",".join(BLOCKED_TOOLS)]
-    if cfg.get("model"):
-        cmd += ["--model", str(cfg["model"])]
-    if add_dir is not None:
-        cmd += ["--add-dir", str(add_dir)]
-    cmd += [str(arg) for arg in (cfg.get("extra_args") or [])]
-    return cmd
+    provider: str = ""
 
 
 def _child_env() -> dict[str, str]:
@@ -187,7 +158,7 @@ def extract_json(text: str) -> dict[str, Any]:
     """
     text = (text or "").strip()
     if not text:
-        raise ClaudeError("model returned nothing")
+        raise ModelError("model returned nothing")
 
     candidates: list[str] = []
     if text.startswith("{"):
@@ -207,7 +178,7 @@ def extract_json(text: str) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
 
-    raise ClaudeError(f"could not parse JSON from model output: {text[:300]}")
+    raise ModelError(f"could not parse JSON from model output: {text[:300]}")
 
 
 def run(
@@ -217,23 +188,39 @@ def run(
     user_prompt: str,
     add_dir: Path | None = None,
 ) -> ModelResult:
-    """One model call. Returns the parsed JSON payload plus usage figures."""
+    """One model call. Returns the parsed JSON payload plus usage figures.
+
+    ``cfg`` is a resolved provider block — see ``config.resolve_provider``.
+    """
     import time
 
-    command = _build_command(cfg, system_prompt, add_dir)
+    try:
+        adapter = providers.get(str(cfg.get("type") or ""))
+    except providers.ProviderError as exc:
+        raise ModelError(str(exc)) from exc
+
     timeout = int(cfg.get("timeout_seconds") or 900)
 
     with tempfile.TemporaryDirectory(prefix="pr-reviewer-cwd-") as scratch:
+        scratch_dir = Path(scratch)
+        call = adapter.prepare(
+            cfg,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            add_dir=add_dir,
+            scratch=scratch_dir,
+        )
+
         started = time.monotonic()
         try:
             # Popen rather than run(), so the handle can be registered and the
             # call stopped when the tool is asked to quit. Its own session, so
-            # terminating it takes the whole tree with it — the CLI spawns
-            # children of its own — and so that a Ctrl-C in the terminal is
+            # terminating it takes the whole tree with it — these CLIs spawn
+            # children of their own — and so that a Ctrl-C in the terminal is
             # something this code decides about rather than something the shell
             # delivers behind its back.
             proc = subprocess.Popen(
-                command,
+                call.command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -243,57 +230,49 @@ def run(
                 start_new_session=True,
             )
         except FileNotFoundError as exc:
-            raise ClaudeError(
-                f"{command[0]!r} is not on PATH. Install the Claude Code CLI and "
-                "sign in, or set claude.command in config/global.json."
+            raise ModelError(
+                f"{call.command[0]!r} is not on PATH. {adapter.install_hint} "
+                f"Or point providers.{adapter.name}.command in config/global.json "
+                "at it."
             ) from exc
 
         _register(proc)
         try:
-            stdout, stderr = proc.communicate(input=user_prompt, timeout=timeout)
+            stdout, stderr = proc.communicate(input=call.stdin, timeout=timeout)
         except subprocess.TimeoutExpired as exc:
             stop_process(proc)
-            raise ClaudeError(f"model call timed out after {timeout}s") from exc
+            raise ModelError(f"model call timed out after {timeout}s") from exc
         finally:
             _forget(proc)
         duration = time.monotonic() - started
 
-    if proc.returncode != 0:
-        if _cancelled.is_set():
-            # Not a failure. We stopped it on the way out, and saying "claude
-            # exited -15" would read as a crash.
-            raise ClaudeError("model call stopped — shutting down")
-        detail = (stderr or stdout or "").strip()[:600]
-        raise ClaudeError(f"claude exited {proc.returncode}: {detail}")
+        if proc.returncode != 0:
+            if _cancelled.is_set():
+                # Not a failure. We stopped it on the way out, and saying
+                # "codex exited -15" would read as a crash.
+                raise ModelError("model call stopped — shutting down")
+            detail = (stderr or stdout or "").strip()[:600]
+            raise ModelError(f"{adapter.name} exited {proc.returncode}: {detail}")
 
-    stdout = stdout or ""
+        # Inside the scratch dir still: some providers write their answer to a
+        # file in it, which is gone as soon as this block ends.
+        try:
+            reply = adapter.read(call, stdout or "")
+        except providers.ProviderError as exc:
+            raise ModelError(str(exc)) from exc
 
-    # --output-format json wraps the reply; older CLI versions print the text
-    # directly. Handle both rather than pinning to one CLI release.
-    usage: dict[str, Any] = {}
-    body = stdout
-    try:
-        envelope = json.loads(stdout)
-    except json.JSONDecodeError:
-        envelope = None
-
-    if isinstance(envelope, dict):
-        if envelope.get("is_error"):
-            raise ClaudeError(f"claude reported an error: {str(envelope)[:400]}")
-        if isinstance(envelope.get("result"), str):
-            body = envelope["result"]
-        usage = envelope.get("usage") or {}
-        for key in ("total_cost_usd", "num_turns", "duration_ms"):
-            if key in envelope:
-                usage[key] = envelope[key]
-    elif isinstance(envelope, dict) is False and stdout.strip().startswith("{"):
-        body = stdout
-
-    payload = extract_json(body)
+    payload = extract_json(reply.text)
 
     log.get().debug(
-        "model call finished in %.1fs (%s)",
+        "%s call finished in %.1fs (%s)",
+        adapter.name,
         duration,
-        ", ".join(f"{k}={v}" for k, v in usage.items()) or "no usage reported",
+        ", ".join(f"{k}={v}" for k, v in reply.usage.items()) or "no usage reported",
     )
-    return ModelResult(payload=payload, raw=body, usage=usage, duration_seconds=duration)
+    return ModelResult(
+        payload=payload,
+        raw=reply.text,
+        usage=reply.usage,
+        duration_seconds=duration,
+        provider=adapter.name,
+    )

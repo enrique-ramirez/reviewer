@@ -10,6 +10,7 @@ Everything the [README](README.md) skipped over. Start anywhere.
 - [Two voices, one call](#two-voices-one-call)
 - [Your review personality](#your-review-personality)
 - [What the model can and cannot do](#what-the-model-can-and-cannot-do)
+- [Which model reviews](#which-model-reviews)
 - [Token scoping](#token-scoping)
 - [Configuration](#configuration)
 - [Command line](#command-line)
@@ -310,8 +311,10 @@ is, and everything else follows from it.
 Three layers, in order of how specific they are:
 
 1. **`personality/`** — how you review anything. Portable; it comes with you.
-2. **The repository's own docs** — `CLAUDE.md` and whatever else
-   `repo_context.paths` matches, read from the default branch. This is where a
+2. **The repository's own docs** — `AGENTS.md`, `CLAUDE.md`, and whatever else
+   `repo_context.paths` matches, read from the default branch. Whichever agent
+   the team wrote them for; this has nothing to do with which provider does the
+   reviewing. This is where a
    codebase's layering, package boundaries and "the most common mistake is X"
    should live, because the team maintains it and it stays current without anyone
    remembering to update a second copy. The reviewer treats departures from it as
@@ -333,10 +336,21 @@ boundary is what makes it safe to read a file the team can edit.
 ## What the model can and cannot do
 
 The model is called as a pure function: compressed diff and PR context in,
-structured JSON out. It gets `Read`, `Glob` and `Grep` against a clean checkout
-of the PR head, so it can look at surrounding code to judge whether a change
-follows the repo's conventions. It has no `Bash`, no `Write`, no `Edit`, no
-network, and no GitHub token.
+structured JSON out. It can read a clean checkout of the PR head, so it can look
+at surrounding code to judge whether a change follows the repo's conventions. It
+cannot write, cannot run a build, cannot reach the network, and never sees a
+GitHub token — that is stripped from the child environment along with anything
+else GitHub-shaped.
+
+Its working directory is an empty scratch dir, never the checkout. All of these
+CLIs auto-load instructions from wherever they start — `CLAUDE.md`, `AGENTS.md`,
+`GEMINI.md` — so starting one inside the tree it is reviewing would let a pull
+request write instructions to its own reviewer. The checkout is named in the
+prompt and reached by absolute path instead.
+
+*How* reading is confined depends on which CLI you point it at, and the
+difference is worth knowing before you switch — see
+[Which model reviews](#which-model-reviews).
 
 Everything that touches GitHub is done by the script, from JSON the script
 validated first — including checking that every comment line actually exists in
@@ -358,6 +372,152 @@ PR's head SHA, your uncommitted work and local `.env` files are not visible to t
 model either.
 
 Set `local_path` to `null` to skip all of this and review the diff alone.
+
+## Which model reviews
+
+Every provider here is a **terminal coding agent** you have already installed and
+signed in. There is no HTTP client anywhere in this tool and no API key in your
+config: a review spends the quota that CLI already has.
+
+| `type` | Runs | How reading is fenced off |
+|---|---|---|
+| [`claude`](#claude-code) | `claude -p` | Tool allowlist **and** denylist |
+| [`codex`](#codex) | `codex exec --sandbox read-only` | Filesystem sandbox — [wider](#codex) |
+| [`gemini`](#gemini-cli) | `gemini --output-format json` | Tool allowlist, writes refused at approval |
+| [`command`](#command) | anything you name | Nothing. You vouch for it |
+
+Two lines pick one:
+
+```json
+"provider": "codex",
+"providers": { "codex": { "model": "gpt-5.1-codex" } }
+```
+
+An entry named after a known type does not have to repeat it. Any other name is
+a profile and must say what it is — which is how you keep two settings of the
+same CLI around:
+
+```json
+"providers": {
+  "cheap": { "type": "claude", "model": "claude-haiku-4-5-20251001" }
+}
+```
+
+Bad names are caught at startup, not fifteen minutes into a watch loop on the one
+pull request that needed the call. `./run.sh --check` goes further and confirms
+every CLI a tick could reach for is actually on `PATH` and runs.
+
+### Per repository
+
+A repo config's `model` block names a provider, overrides its settings, or both.
+Anything it sets is layered over the named entry, so pinning just the model
+leaves the command, tools and timeout alone:
+
+```json
+"model": { "model": "claude-sonnet-5" }
+```
+
+```json
+"model": { "provider": "codex", "model": "gpt-5.1-codex" }
+```
+
+A `null` means *inherit*, not *unset*, which is what lets the sample config ship
+the block with every key blank. Merge summaries follow whatever the repo chose,
+unless `merge_summary.provider` names one of its own — worth doing if you keep a
+cheaper CLI around, since summarising is not judging.
+
+### What every provider does the same way
+
+Four things are true whichever one you pick, because the guarantees in this file
+rest on them rather than on any one vendor's flags:
+
+- **The prompt goes in on stdin**, never as an argument. A review bundle would
+  hit `ARG_MAX` long before it hit anything else.
+- **The working directory is an empty scratch dir**, never the checkout — see
+  [above](#what-the-model-can-and-cannot-do) for why that one matters most.
+- **`GITHUB_TOKEN` and friends are stripped** from the child environment.
+- **The call is killed on quit**, along with any children it spawned.
+
+`allowed_tools` is written in one vocabulary — `Read`, `Glob`, `Grep` — and each
+adapter translates it into whatever its CLI calls those things. Those happen to
+be Claude Code's names, because that is what this config already spoke; they are
+the canonical spelling here rather than a statement about which provider is
+in charge. Names an adapter does not recognise are passed through untouched, so
+a provider-specific list works too.
+
+CLI flags drift between releases faster than any adapter can. Every provider's
+`extra_args` is appended verbatim to each invocation — that is the escape hatch,
+and reaching for it is expected rather than a sign something is wrong.
+
+### What changes when you switch
+
+The rest is not vendor-neutral, and pretending otherwise would be the wrong kind
+of documentation. Each provider gets its own list below.
+
+#### Claude Code
+
+`"type": "claude"` · `claude -p --output-format json`
+
+The default, and the reason the other defaults look as they do: it is the only
+one here that takes both an explicit tool allowlist and an explicit denylist, so
+*may read files, may not run anything* is a fact about the process rather than a
+hope about the model.
+
+- `allowed_tools` is passed through unchanged — these are its own tool names.
+- The denylist (`Bash`, `Write`, `Edit`, `WebFetch`, `Task`, …) is sent on every
+  call, including the tool-less merge summary.
+- The system prompt travels in `--append-system-prompt`, separate from the diff.
+- No known gotchas. If you have no reason to move, do not.
+
+#### Codex
+
+`"type": "codex"` · `codex exec --sandbox read-only --skip-git-repo-check`
+
+- **Its read-only sandbox is read-only about *writing*.** Within it the model may
+  run read-only shell commands, and may read paths outside the checkout —
+  including the rest of your home directory. That is a wider read surface than
+  the two allowlist-based providers, where the tool list is the boundary. It
+  still cannot write, install, or reach the network, and the token is stripped
+  either way — but if the scoping above is why you run this tool, that is the
+  line that moves.
+- **`allowed_tools` is not read.** There is no tool list to apply it to, so
+  setting it there does nothing — including the empty list the merge summary
+  uses, which means summaries run with the same sandbox as reviews rather than
+  with nothing.
+- **No `--append-system-prompt`.** Your personality is folded into the top of the
+  user message inside `<reviewer_instructions>` instead. Same text, different
+  envelope.
+- `--skip-git-repo-check` is required because the scratch working directory is
+  deliberately not a git repository.
+- The answer is read from `--output-last-message`, with the JSONL event stream as
+  a fallback, so one empty output channel does not cost a review.
+
+#### Gemini CLI
+
+`"type": "gemini"` · `gemini --output-format json --approval-mode default`
+
+- **Writes are blocked by withholding approval, not by dropping the tools.** A
+  write needs a confirmation a non-interactive run cannot give, so it fails.
+  **Do not put `--approval-mode yolo` in `extra_args`** — one flag is all that
+  stands between this and a model with edit rights on the checkout.
+- `--include-directories` grants write access as well as read, which is why the
+  point above is load-bearing rather than belt-and-braces.
+- `allowed_tools` is translated: `Read` → `read_file`, `Glob` → `glob`,
+  `Grep` → `search_file_content`.
+- **No `--append-system-prompt`.** Folded into the message, as with Codex.
+
+#### command
+
+`"type": "command"` · whatever you named, with `extra_args` as the command line
+
+The escape hatch: any CLI that takes a prompt on stdin and prints an answer on
+stdout. Requires an explicit `command`; there is no default to guess.
+
+- **Nothing here can restrict what that command does.** It gets whatever it gives
+  itself — no allowlist, no sandbox, no denylist. Point it at something
+  read-only, and treat it as a program you are vouching for.
+- The system prompt is folded into the message; the reply is read straight from
+  stdout with no envelope to unwrap.
 
 ## Token scoping
 
@@ -390,7 +550,8 @@ The token is never placed in the model's environment.
 
 `./run.sh --check` probes each of these one at a time and names the exact
 permission behind any failure, along with the account the token belongs to and
-whether the `claude` CLI is reachable. Run it whenever the token changes.
+whether every configured model CLI is reachable. Run it whenever the token
+changes.
 
 ## Configuration
 
@@ -429,7 +590,7 @@ only when you pass `--debug`.
   --init              Write the config files by asking a few questions, then
                       exit. Never overwrites; safe to re-run.
   --check             Probe what the token can reach, check the account and the
-                      claude CLI, name any missing permission, and exit.
+                      model CLIs, name any missing permission, and exit.
   --once              One pass, then exit
   --dry-run           Do everything except write to GitHub; the drafted review
                       is saved to the state directory so you can read it
@@ -457,10 +618,6 @@ is still working is skipped rather than queued, so a slow review cannot pile up.
 
 ## Roadmap
 
-- **More than one model provider.** Everything model-shaped already goes through
-  one module and one config block (`claude.command`, `claude.model`,
-  `claude.extra_args`), so a second provider is a matter of another adapter
-  behind the same interface rather than a rewrite.
 - **CI**, once the tests can run on a hosted runner.
 - **Richer per-repository health** in the sidebar — review latency, how long
   things sit waiting on a human.
@@ -474,6 +631,8 @@ reviewer/
   identity.py   who the token belongs to
   preflight.py  --check
   pipeline.py   one repository's tick: gates, diff, model call, publish
+  model.py      the subprocess: one prompt in, one JSON object out
+  providers.py  one adapter per coding-agent CLI
   state.py      SQLite — the only thing that outlives a run
   gh/           the GitHub clients, REST and GraphQL
   tui/          the dashboard, and the only place Textual is imported

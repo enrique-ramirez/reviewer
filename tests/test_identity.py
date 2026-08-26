@@ -26,8 +26,14 @@ def repo_config(**overrides: object) -> RepoConfig:
 
 
 def _global_config() -> object:
+    """Just enough GlobalConfig for RepoConfig.load, without a token."""
+
     class Stub:
         default_language = "en"
+        providers = {"claude": {"type": "claude", "command": "claude"}}
+
+        def resolve_provider(self, overrides: dict | None = None) -> dict:
+            return dict(self.providers["claude"], name="claude")
 
     return Stub()
 

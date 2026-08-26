@@ -34,7 +34,7 @@ from textual.widgets import (
     TabPane,
 )
 
-from .. import backfill, claude
+from .. import backfill, model
 from ..state import Store
 from . import browser, data, filling, screens
 from .logs import LogRelay
@@ -541,7 +541,7 @@ class Dashboard(App[None]):
         if self.asking:
             return
         self.push_screen(
-            screens.quit_question(self._in_flight(), claude.live_count()),
+            screens.quit_question(self._in_flight(), model.live_count()),
             self._answer_quit,
         )
 

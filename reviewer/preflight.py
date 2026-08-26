@@ -21,7 +21,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from . import identity
+from . import identity, providers
 from .config import GlobalConfig, RepoConfig
 from .gh.rest import ACCEPT, API_VERSION, USER_AGENT
 
@@ -123,38 +123,90 @@ def _check_account(global_cfg: GlobalConfig, repos: list[RepoConfig]) -> int:
     return 1 if wrong else 0
 
 
-def _check_claude(global_cfg: GlobalConfig) -> int:
-    """The other half of the dependency set, and the one the API cannot report."""
-    command = global_cfg.claude.get("command") or "claude"
+def _providers_in_use(
+    global_cfg: GlobalConfig, repos: list[RepoConfig]
+) -> dict[str, tuple[dict[str, Any], list[str]]]:
+    """Every provider a tick could reach for, and who asked for it.
+
+    Not just the default: a per-repository override naming a CLI that was never
+    installed should be a line here, in the command whose whole job is finding
+    that out, rather than a failed review an hour into a watch loop.
+    """
+    found: dict[str, tuple[dict[str, Any], list[str]]] = {}
+    summaries = global_cfg.merge_summary.get("enabled", True)
+
+    def note(cfg: dict[str, Any], user: str) -> None:
+        _, users = found.setdefault(cfg["name"], (cfg, []))
+        if user not in users:
+            users.append(user)
+
+    default = global_cfg.provider_for()
+    note(default, "default")
+
+    def note_if_different(cfg: dict[str, Any], user: str) -> None:
+        # Only what departs from the default earns a name. Listing every
+        # repository that agrees with it would bury the one that does not.
+        if cfg["name"] != default["name"]:
+            note(cfg, user)
+
+    if summaries:
+        note_if_different(global_cfg.summary_provider_for(), "merge summaries")
+    for repo in repos:
+        note_if_different(global_cfg.provider_for(repo), repo.repo)
+        if summaries:
+            note_if_different(global_cfg.summary_provider_for(repo), repo.repo)
+    return found
+
+
+def _check_provider(name: str, cfg: dict[str, Any], users: list[str]) -> int:
+    """Is this one CLI installed, and does it run?"""
+    adapter = providers.get(str(cfg["type"]))
+    command = adapter.command_name(cfg)
+    who = ", ".join(users)
+    pinned = f", model {cfg['model']}" if cfg.get("model") else ""
+
     path = shutil.which(command)
     if path is None:
-        print(f"claude : {command!r} is not on PATH")
-        print("         Install the Claude Code CLI and sign in, or point")
-        print("         claude.command in config/global.json at it.")
+        print(f"model  : {name} — {command!r} is not on PATH   ({who})")
+        print(f"         {adapter.install_hint}")
+        print(f"         Or point providers.{name}.command in config/global.json at it.")
         return 1
 
     try:
         result = subprocess.run(
-            [command, "--version"], capture_output=True, text=True, timeout=20
+            [command, *adapter.version_args()],
+            capture_output=True,
+            text=True,
+            timeout=20,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        print(f"claude : {path} — could not run it ({exc})")
+        print(f"model  : {name} — {path} could not be run ({exc})")
         return 1
 
     version = (result.stdout or result.stderr).strip().splitlines()
     label = version[0] if version else "no version reported"
     if result.returncode != 0:
-        print(f"claude : {path} — exited {result.returncode}: {label}")
+        print(f"model  : {name} — {path} exited {result.returncode}: {label}")
         return 1
-    print(f"claude : {label}   ({path})")
+
+    print(f"model  : {name} — {label}{pinned}   ({who})")
+    if adapter.caveat:
+        print(f"         note: {adapter.caveat}")
     # Signed in is not something --version can answer; the first review will.
     return 0
+
+
+def _check_models(global_cfg: GlobalConfig, repos: list[RepoConfig]) -> int:
+    worst = 0
+    for name, (cfg, users) in _providers_in_use(global_cfg, repos).items():
+        worst = max(worst, _check_provider(name, cfg, users))
+    return worst
 
 
 def environment(global_cfg: GlobalConfig, repos: list[RepoConfig]) -> int:
     """What is true regardless of which repository is being reviewed."""
     _check_token_source(global_cfg.token)
-    return max(_check_account(global_cfg, repos), _check_claude(global_cfg))
+    return max(_check_account(global_cfg, repos), _check_models(global_cfg, repos))
 
 
 def run(global_cfg: GlobalConfig, cfg: RepoConfig, pr_number: int | None) -> int:

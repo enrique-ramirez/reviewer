@@ -7,26 +7,118 @@
   "max_reviews_per_tick": 6,
   "$comment_max_reviews": "Quota is shared across all repos. Repos are walked in the order they load (alphabetical by filename), so name them to encode priority.",
 
-  "claude": {
-    "command": "claude",
-    "model": null,
-    "$comment_model": "null uses whatever your CLI defaults to. Set e.g. 'claude-opus-5' or 'claude-sonnet-5' to pin one.",
+  "provider": "claude",
+  "$comment_provider": "Which entry from 'providers' below does the reviewing by default. A repository can name a different one in its own config; see config/repos.sample/.",
 
-    "extra_args": [],
-    "$comment_extra_args": "Appended verbatim to every invocation. Claude Code's CLI flags change between versions — run `claude --help` and put anything version-specific here rather than editing Python.",
+  "providers": {
+    "$comment": [
+      "The CLIs you have installed and signed in. Every one of these is a terminal",
+      "coding agent driven as a subprocess — a review runs on whatever subscription",
+      "that CLI already has, and this tool never holds an API key.",
+      "",
+      "An entry named after a known type ('claude', 'codex', 'gemini', 'command')",
+      "does not need to repeat it. Any other name is a profile and must say what",
+      "type it is — useful for having two settings of the same CLI:",
+      "",
+      "  \"cheap\": { \"type\": \"claude\", \"model\": \"claude-haiku-4-5-20251001\" }",
+      "",
+      "You only need entries for CLIs you actually use; the unused ones cost nothing.",
+      "",
+      "Shared by all of them: the prompt goes in on stdin, the working directory is",
+      "an empty scratch dir rather than the checkout, GITHUB_TOKEN is stripped from",
+      "the environment, and 'extra_args' is appended verbatim so version-specific",
+      "flags never need a code change. What differs is in each entry's $caveats.",
+      "FEATURES.md#which-model-reviews has the long version."
+    ],
 
-    "allowed_tools": ["Read", "Glob", "Grep"],
-    "$comment_allowed_tools": "Read-only tools so the reviewer can check surrounding code for conventions. Adding Bash, Write, or Edit would give a PR under review the ability to act on this machine.",
+    "claude": {
+      "command": "claude",
 
-    "timeout_seconds": 900
+      "model": null,
+      "$comment_model": "null uses whatever your CLI defaults to. Set e.g. 'claude-opus-5' or 'claude-sonnet-5' to pin one.",
+
+      "extra_args": [],
+      "$comment_extra_args": "Appended verbatim to every invocation. CLI flags change between versions — run `claude --help` and put anything version-specific here rather than editing Python.",
+
+      "allowed_tools": ["Read", "Glob", "Grep"],
+      "$comment_allowed_tools": "Read-only tools so the reviewer can check surrounding code for conventions. Adding Bash, Write, or Edit would give a PR under review the ability to act on this machine. These names are the config's shared vocabulary; other providers translate them, this one passes them through.",
+
+      "timeout_seconds": 900,
+
+      "$caveats": [
+        "None worth listing. This is the tightest of the three: it takes an",
+        "explicit tool allowlist AND an explicit denylist, so 'may read files, may",
+        "not run anything' is a fact about the process rather than a hope about",
+        "the model. The other entries are documented against this one."
+      ]
+    },
+
+    "codex": {
+      "command": "codex",
+      "model": null,
+      "$comment_model": "null uses your codex default. Run `codex --help` for the names it accepts.",
+
+      "extra_args": [],
+      "timeout_seconds": 900,
+
+      "$caveats": [
+        "Run as `codex exec --sandbox read-only`, which cannot write, install, or",
+        "reach the network.",
+        "",
+        "1. That sandbox is read-only about WRITING. Within it the model may run",
+        "   read-only shell commands and may read paths outside the checkout,",
+        "   including the rest of your home directory. Wider than the allowlist",
+        "   providers, where the tool list is the boundary.",
+        "2. 'allowed_tools' is not read here — there is no tool list to apply it",
+        "   to. That includes the empty list merge summaries use, so a summary",
+        "   runs with the same sandbox a review does rather than with nothing.",
+        "3. No --append-system-prompt, so your personality is folded into the top",
+        "   of the user message instead. Same text, different envelope."
+      ]
+    },
+
+    "gemini": {
+      "command": "gemini",
+      "model": null,
+      "extra_args": [],
+      "allowed_tools": ["Read", "Glob", "Grep"],
+      "$comment_allowed_tools": "Translated to Gemini's own tool names (read_file, glob, search_file_content). Names it does not recognise are passed through, so a Gemini-specific list works too.",
+
+      "timeout_seconds": 900,
+
+      "$caveats": [
+        "1. Writes are blocked by withholding approval, not by dropping the tools.",
+        "   It runs with --approval-mode default, so a write needs a confirmation",
+        "   a non-interactive run cannot give and therefore fails. DO NOT put",
+        "   --approval-mode yolo in extra_args — that is the whole guard.",
+        "2. --include-directories grants write access as well as read, which is",
+        "   why point 1 is load-bearing rather than belt-and-braces.",
+        "3. No --append-system-prompt; folded into the message, as with codex."
+      ]
+    },
+
+    "$comment_command_type": [
+      "The escape hatch. type 'command' runs anything that takes a prompt on stdin",
+      "and prints an answer on stdout, with extra_args as the whole command line:",
+      "",
+      "  \"mine\": { \"type\": \"command\", \"command\": \"my-agent\", \"extra_args\": [\"--headless\"] }",
+      "",
+      "Caveat, and it is the whole caveat: nothing here can restrict what that",
+      "command does. No allowlist, no denylist, no sandbox — it gets whatever it",
+      "gives itself. Point it at something read-only and treat it as a program you",
+      "are vouching for."
+    ]
   },
 
   "merge_summary": {
     "enabled": true,
     "$comment": "The one-line 'what changed' on the Summary tab. Written once per merged pull request and kept, so this is the cheapest call the tool makes: a few hundred lines of metadata, no tools, no checkout. Set false to keep the merge record but leave the descriptions blank.",
 
+    "provider": null,
+    "$comment_provider": "null means summaries run on whatever provider reviews that repository. Name one here to send every summary somewhere else — worth it if you keep a cheaper CLI around, since this is a summarising job, not a judging one. Setting this drops any per-repo model pin, which belongs to a different provider.",
+
     "model": null,
-    "$comment_model": "null reuses claude.model. Worth pointing at a smaller model than the reviewer uses — this is a summarising job, not a judging one.",
+    "$comment_model": "null reuses the provider's model. Worth pointing at a smaller model than the reviewer uses.",
 
     "timeout_seconds": 180,
     "max_per_tick": 5,

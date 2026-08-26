@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import claude, log, prompt, render
+from . import log, model, prompt, render
 from .config import GlobalConfig, RepoConfig
 from .gh import GraphQLClient, RestClient
 from .gh.graphql import PRSnapshot, ReviewThread
@@ -105,13 +105,13 @@ def handle(
     debug.write(cfg.repo, snapshot.number, f"thread-{thread.node_id[:8]}-prompt.md", user)
 
     try:
-        result = claude.run(
-            global_cfg.claude,
+        result = model.run(
+            global_cfg.provider_for(cfg),
             system_prompt=system,
             user_prompt=user,
             add_dir=checkout_path,
         )
-    except claude.ClaudeError as exc:
+    except model.ModelError as exc:
         log.get().error("thread check failed on #%s: %s", snapshot.number, exc)
         return None
 

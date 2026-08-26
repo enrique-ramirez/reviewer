@@ -3,13 +3,20 @@
 Layout:
 
     config/.env                  token (gitignored)
-    config/global.json           tick interval, claude flags (gitignored)
+    config/global.json           tick interval, provider settings (gitignored)
     config/repos/*.json          one file per repository (gitignored)
     config/repos.sample/*.json   tracked examples
 
 Keys beginning with ``$`` are documentation and are stripped on load, so the
 sample files can explain themselves without a separate reference doc drifting
 out of date.
+
+Which model does the reviewing is settled here, in two halves. ``providers`` in
+the global config is a named list of CLIs you have installed; ``provider`` picks
+which of them is the default. A repository that wants something else says so in
+its own ``model`` block, and anything it sets there is layered over the named
+provider — so "everything on the usual one, except this noisy repo on something
+cheaper" is two lines, not a second config file.
 """
 
 from __future__ import annotations
@@ -21,24 +28,49 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import log
+from . import log, providers
 
 DEFAULT_API_URL = "https://api.github.com"
 DEFAULT_GRAPHQL_URL = "https://api.github.com/graphql"
+
+#: The conventions files a team is likely to keep, whichever agent they wrote
+#: them for. Nothing to do with which provider reviews — this is the *reviewed*
+#: repository's own documentation.
+DEFAULT_CONTEXT_PATHS = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".claude/*.md"]
 
 GLOBAL_DEFAULTS: dict[str, Any] = {
     "tick_seconds": 900,
     "default_language": "en",
     "max_reviews_per_tick": 6,
-    "claude": {
-        "command": "claude",
-        "model": None,
-        "extra_args": [],
-        "allowed_tools": ["Read", "Glob", "Grep"],
-        "timeout_seconds": 900,
+    "provider": "claude",
+    "providers": {
+        "claude": {
+            "type": "claude",
+            "command": "claude",
+            "model": None,
+            "extra_args": [],
+            "allowed_tools": ["Read", "Glob", "Grep"],
+            "timeout_seconds": 900,
+        },
+        "codex": {
+            "type": "codex",
+            "command": "codex",
+            "model": None,
+            "extra_args": [],
+            "timeout_seconds": 900,
+        },
+        "gemini": {
+            "type": "gemini",
+            "command": "gemini",
+            "model": None,
+            "extra_args": [],
+            "allowed_tools": ["Read", "Glob", "Grep"],
+            "timeout_seconds": 900,
+        },
     },
     "merge_summary": {
         "enabled": True,
+        "provider": None,
         "model": None,
         "timeout_seconds": 180,
         "max_per_tick": 5,
@@ -54,6 +86,10 @@ REPO_DEFAULTS: dict[str, Any] = {
     "identity": None,
     "language": None,
     "agent_language": None,
+    # Empty means "whatever the global config says". A "provider" here names an
+    # entry from the global "providers" list; every other key is layered over
+    # that entry, so pinning just the model is one line.
+    "model": {},
     "gates": {
         "skip_drafts": True,
         "skip_own_prs": True,
@@ -88,7 +124,7 @@ REPO_DEFAULTS: dict[str, Any] = {
         "repo_context": {
             "enabled": True,
             "from_ref": "default_branch",
-            "paths": ["CLAUDE.md", ".claude/*.md"],
+            "paths": list(DEFAULT_CONTEXT_PATHS),
             "max_chars": 20000,
         },
         "max_disagreement_rounds_per_thread": 3,
@@ -202,12 +238,59 @@ def load_env(config_dir: Path, repo_root: Path) -> dict[str, str]:
     return dict(ENV_SOURCES)
 
 
+def _check_providers(entries: Any, default: str, path: Path) -> dict[str, dict[str, Any]]:
+    """Validate the provider table, and fill in each entry's ``type``.
+
+    Checked at load rather than at the first review, because the alternative is
+    finding out that a provider name is misspelled fifteen minutes into a watch
+    loop, on the one pull request that needed the call.
+
+    An entry named after a known type does not have to repeat it, so the common
+    case stays two lines. A named profile — "cheap", "work" — has to say what it
+    is, because there is nothing to guess from.
+    """
+    if not isinstance(entries, dict) or not entries:
+        raise ConfigError(f'{path}: "providers" must be a non-empty object')
+
+    checked: dict[str, dict[str, Any]] = {}
+    for name, entry in entries.items():
+        if not isinstance(entry, dict):
+            raise ConfigError(f'{path}: providers.{name} must be an object')
+        entry = copy.deepcopy(entry)
+        kind = str(entry.get("type") or name)
+        if kind not in providers.TYPES:
+            hint = (
+                f'providers.{name} has no "type"'
+                if not entry.get("type")
+                else f'providers.{name} has type {kind!r}'
+            )
+            raise ConfigError(
+                f"{path}: {hint}, which is not one of "
+                f"{', '.join(providers.TYPES)}."
+            )
+        if kind == providers.CommandAdapter.name and not entry.get("command"):
+            raise ConfigError(
+                f'{path}: providers.{name} is type "command", so it needs a '
+                '"command" to run — there is no default for it.'
+            )
+        entry["type"] = kind
+        checked[str(name)] = entry
+
+    if default not in checked:
+        raise ConfigError(
+            f"{path}: \"provider\" is {default!r}, which is not in \"providers\" "
+            f"({', '.join(sorted(checked))})."
+        )
+    return checked
+
+
 @dataclass
 class GlobalConfig:
     tick_seconds: int
     default_language: str
     max_reviews_per_tick: int
-    claude: dict[str, Any]
+    provider: str
+    providers: dict[str, dict[str, Any]]
     merge_summary: dict[str, Any]
     notifications: dict[str, Any]
     logging: dict[str, Any]
@@ -227,11 +310,22 @@ class GlobalConfig:
                 "fill it in, or export GITHUB_TOKEN in your shell."
             )
 
+        default = str(data["provider"])
+        checked = _check_providers(data["providers"], default, path)
+
+        summary_provider = data["merge_summary"].get("provider")
+        if summary_provider and summary_provider not in checked:
+            raise ConfigError(
+                f"{path}: merge_summary.provider is {summary_provider!r}, which "
+                f"is not in \"providers\" ({', '.join(sorted(checked))})."
+            )
+
         return cls(
             tick_seconds=int(data["tick_seconds"]),
             default_language=str(data["default_language"]),
             max_reviews_per_tick=int(data["max_reviews_per_tick"]),
-            claude=data["claude"],
+            provider=default,
+            providers=checked,
             merge_summary=data["merge_summary"],
             notifications=data["notifications"],
             logging=data["logging"],
@@ -239,6 +333,60 @@ class GlobalConfig:
             graphql_url=os.environ.get("GITHUB_GRAPHQL_URL", DEFAULT_GRAPHQL_URL),
             token=token,
         )
+
+    def resolve_provider(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+        """A named provider with a set of overrides layered on top.
+
+        ``provider`` in the overrides picks the entry; everything else is a
+        setting of that entry. A null override means "inherit", which is what
+        lets a repo config carry the whole block with most of it left blank.
+        """
+        overrides = overrides or {}
+        name = str(overrides.get("provider") or self.provider)
+        entry = self.providers.get(name)
+        if entry is None:
+            raise ConfigError(
+                f"unknown provider {name!r}; config/global.json defines "
+                f"{', '.join(sorted(self.providers))}"
+            )
+        rest = {
+            key: value
+            for key, value in overrides.items()
+            if key != "provider" and value is not None
+        }
+        resolved = _deep_merge(entry, rest)
+        resolved["name"] = name
+        return resolved
+
+    def provider_for(self, repo: "RepoConfig | None" = None) -> dict[str, Any]:
+        """What a review of ``repo`` should run against."""
+        return self.resolve_provider(repo.model if repo else None)
+
+    def summary_provider_for(self, repo: "RepoConfig | None" = None) -> dict[str, Any]:
+        """What the one-line merge summary should run against.
+
+        Starts from whatever reviews that repo — so a repo that moved provider
+        moves its summaries too — then applies ``merge_summary``. Tools are
+        dropped and no directory is added, so the call has nothing to read and
+        nothing to reach. The timeout is much shorter than a review's: this is a
+        small prompt, and one that hangs should be abandoned rather than holding
+        up the tick behind it.
+        """
+        settings = self.merge_summary
+        overrides = dict(repo.model) if repo else {}
+
+        if settings.get("provider"):
+            # An explicit "summaries go here" outranks the repo's choice. Its
+            # model name goes with it: a model pinned for one provider means
+            # nothing to another, and passing it on would fail the call.
+            overrides["provider"] = settings["provider"]
+            overrides.pop("model", None)
+        if settings.get("model"):
+            overrides["model"] = settings["model"]
+
+        overrides["allowed_tools"] = []
+        overrides["timeout_seconds"] = int(settings.get("timeout_seconds") or 180)
+        return self.resolve_provider(overrides)
 
 
 @dataclass
@@ -251,6 +399,7 @@ class RepoConfig:
     identity: str | None
     language: str
     agent_language: str
+    model: dict[str, Any]
     gates: dict[str, Any]
     diff: dict[str, Any]
     review: dict[str, Any]
@@ -286,6 +435,21 @@ class RepoConfig:
         language = data.get("language") or global_config.default_language
         agent_language = data.get("agent_language") or language
 
+        model = data.get("model") or {}
+        if not isinstance(model, dict):
+            raise ConfigError(
+                f'{path}: "model" must be an object of provider settings, not '
+                f"{type(model).__name__}. To pin a model, write "
+                '{"model": {"model": "..."}}.'
+            )
+        # Resolve it once here so a bad provider name is an error at startup
+        # rather than a failed review fifteen minutes into a watch loop.
+        try:
+            resolved = global_config.resolve_provider(model)
+            providers.get(str(resolved.get("type") or ""))
+        except (ConfigError, providers.ProviderError) as exc:
+            raise ConfigError(f"{path}: {exc}") from exc
+
         return cls(
             repo=repo,
             owner=owner,
@@ -295,6 +459,7 @@ class RepoConfig:
             identity=(str(data["identity"]).strip() if data.get("identity") else None),
             language=str(language),
             agent_language=str(agent_language),
+            model=model,
             gates=data["gates"],
             diff=data["diff"],
             review=data["review"],

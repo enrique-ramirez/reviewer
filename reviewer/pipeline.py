@@ -16,10 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from . import (
-    claude,
     diff,
     gates,
     log,
+    model,
     notify,
     prompt,
     publish,
@@ -28,7 +28,7 @@ from . import (
     threads,
     worktree,
 )
-from .config import GlobalConfig, RepoConfig
+from .config import DEFAULT_CONTEXT_PATHS, GlobalConfig, RepoConfig
 from .gh import GitHubError, GraphQLClient, RestClient
 from .gh.graphql import PRSnapshot
 from .log import DebugSink
@@ -352,7 +352,7 @@ class Reviewer:
         files = None if review_summary.strip() else self._changed_paths(number)
 
         text = summarize.describe(
-            summarize.model_config(self.global_cfg.claude, settings),
+            self.global_cfg.summary_provider_for(cfg),
             repo=cfg.repo,
             pull=pull,
             review_summary=review_summary,
@@ -717,7 +717,7 @@ class Reviewer:
             files = worktree.read_trusted_files(
                 self.cfg.local_path,
                 ref,
-                settings.get("paths") or ["CLAUDE.md"],
+                settings.get("paths") or DEFAULT_CONTEXT_PATHS,
                 int(settings.get("max_chars") or 20000),
             )
         except worktree.GitError as exc:
@@ -895,14 +895,14 @@ class Reviewer:
         tag: str,
     ) -> dict[str, Any] | None:
         try:
-            result = claude.run(
-                self.global_cfg.claude,
+            result = model.run(
+                self.global_cfg.provider_for(self.cfg),
                 system_prompt=system,
                 user_prompt=user,
                 add_dir=checkout_path,
             )
-        except claude.ClaudeError as exc:
-            if claude.cancelled():
+        except model.ModelError as exc:
+            if model.cancelled():
                 # We stopped it on purpose. Not an error worth shouting about.
                 log.get().info("%s#%s: review abandoned — %s", self.cfg.repo, number, exc)
             else:

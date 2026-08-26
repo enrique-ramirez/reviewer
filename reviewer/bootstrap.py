@@ -1,4 +1,4 @@
-"""``--init``: the five copy-and-edit steps, asked rather than documented.
+"""``--init``: the copy-and-edit steps, asked rather than documented.
 
 Everything here writes from the tracked samples rather than from strings in this
 file, so the samples stay the single description of what a config looks like and
@@ -9,15 +9,26 @@ reach for when you are not sure what state a checkout is in.
 
 from __future__ import annotations
 
+import json
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import providers
 
 TOKEN_URL = "https://github.com/settings/personal-access-tokens"
 TOKEN_PLACEHOLDER = "GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxxxx"
 
 REPO_PLACEHOLDER = '"repo": "example-org/example-repo"'
 PATH_PLACEHOLDER = '"local_path": "~/Projects/example-org/example-repo"'
+
+PROVIDER_PLACEHOLDER = '"provider": "claude",'
+
+# Offered by --init, in the order asked. The generic "command" type is not here
+# on purpose: it needs a command name to be worth anything, and someone who
+# wants it is already reading the sample file.
+OFFERED = ("claude", "codex", "gemini")
 
 
 @dataclass(frozen=True)
@@ -91,14 +102,49 @@ def _ask_token(paths: Paths) -> bool:
     return True
 
 
-def _write_global(paths: Paths) -> bool:
+def _ask_provider() -> str:
+    """Which coding-agent CLI does the reviewing.
+
+    Whichever is already installed is offered as the default, so the common case
+    is one Enter. Nothing is rejected for not being on PATH — installing it
+    afterwards is normal, and ``--check`` is the command that has an opinion
+    about that.
+    """
+    _say("  Reviews run through a coding-agent CLI you have already signed in,")
+    _say("  so they cost that subscription's quota rather than an API key.")
+    _say()
+
+    default = ""
+    for name in OFFERED:
+        adapter = providers.get(name)
+        where = shutil.which(adapter.default_command)
+        _say(f"    {name:8} {'found at ' + where if where else 'not on PATH'}")
+        if where and not default:
+            default = name
+
+    _say()
+    while True:
+        answer = _ask(f"Which one? ({'/'.join(OFFERED)})", default or OFFERED[0]).lower()
+        if answer in OFFERED:
+            return answer
+        _say(f"  ↳ pick one of {', '.join(OFFERED)}")
+
+
+def _write_global(paths: Paths, provider: str) -> bool:
     if paths.global_config.exists():
         _say(f"  {paths.global_config.name} already exists — leaving it alone")
         return False
-    paths.global_config.write_text(
-        paths.global_sample.read_text(encoding="utf-8"), encoding="utf-8"
-    )
+
+    body = paths.global_sample.read_text(encoding="utf-8")
+    body = body.replace(PROVIDER_PLACEHOLDER, f'"provider": {json.dumps(provider)},')
+    paths.global_config.write_text(body, encoding="utf-8")
+
     _say(f"  wrote {paths.global_config}   (every key optional; edit at will)")
+    adapter = providers.get(provider)
+    if not shutil.which(adapter.default_command):
+        _say(f"  ↳ {adapter.default_command!r} is not on PATH yet. {adapter.install_hint}")
+    if adapter.caveat:
+        _say(f"  ↳ note: {adapter.caveat}")
     return True
 
 
@@ -173,10 +219,13 @@ def run(config_dir: Path, repo_root: Path) -> int:
         _say("1. Token")
         _ask_token(paths)
         _say()
-        _say("2. Global settings")
-        _write_global(paths)
+        _say("2. Which model reviews")
+        provider = _ask_provider()
         _say()
-        _say("3. A repository to watch")
+        _say("3. Global settings")
+        _write_global(paths, provider)
+        _say()
+        _say("4. A repository to watch")
         _ask_repo(paths)
     except Abandoned:
         _say("\n  Left it there. Re-run --init any time.\n")

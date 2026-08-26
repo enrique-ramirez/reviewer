@@ -1,8 +1,8 @@
 """Read-only checkouts of PR heads, borrowed from your everyday clone.
 
-The point of this module is to give the model somewhere to run ``Read`` /
-``Glob`` / ``Grep`` — so it can check whether a change follows the conventions of
-the code around it — without disturbing the clone you work in.
+The point of this module is to give the model somewhere to read — so it can
+check whether a change follows the conventions of the code around it — without
+disturbing the clone you work in.
 
 What it does to your repository:
 
@@ -186,7 +186,7 @@ def pr_checkout(repo: Path, pr_number: int, head_sha: str) -> Iterator[Checkout]
 def fetch_base_ref(repo: Path, branch: str) -> str:
     """Fetch a branch into ``refs/reviewer/base-*`` and return the ref name.
 
-    Used to read the repository's own ``CLAUDE.md`` from code that has already
+    Used to read the repository's own agent docs from code that has already
     been reviewed, rather than from the branch under review.
     """
     ref = f"{REF_NAMESPACE}/base-{branch.replace('/', '-')}"

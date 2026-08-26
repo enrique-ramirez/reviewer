@@ -823,9 +823,9 @@ class Store:
         and the merge is recorded either way, so these are retried on later
         ticks and a transient failure costs a delay rather than the summary.
 
-        ``max_tries`` is what stops that retry from becoming permanent: with no
-        ``claude`` on PATH every merge would otherwise buy a failed subprocess
-        every tick, forever.
+        ``max_tries`` is what stops that retry from becoming permanent: with the
+        configured provider's CLI missing from PATH, every merge would otherwise
+        buy a failed subprocess every tick, forever.
         """
         where, params = self._merged_filters(repos, None, None)
         joiner = " AND" if where else " WHERE"
