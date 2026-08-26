@@ -22,7 +22,8 @@ from ..data import MergePage
 from ..models import Merge
 from ..session import WINDOWS, Session
 from ..widgets import Cells, Column
-from .base import RecordView
+from ..widgets import Action
+from .base import OPEN_ON_GITHUB, RecordView
 
 AUTHOR_WIDTH = 16
 REPO_WIDTH = 18
@@ -83,16 +84,33 @@ def _cost(merge: Merge) -> Text | None:
     return prose.field("cost", " · ".join(parts) + (f"   {cost.label}" if cost.label else ""))
 
 
-def _summary_paragraph(merge: Merge) -> Text:
-    if not merge.description:
+def _summary_paragraph(merge: Merge, width: int) -> Text:
+    """What the change actually did — the reason this pane exists.
+
+    Given a rule of its own and a bar down its edge, because on History it is
+    the one thing someone came to read and it was previously the same weight as
+    the metadata around it.
+
+    A backfilled row carries the author's title rather than a summary, and the
+    title is already the headline two lines above. Repeating it there dressed as
+    a summary said nothing twice; the empty state and the button say something.
+    """
+    written = merge.description if merge.described_by_model else ""
+    if written:
         return prose.join(
-            prose.line("Summary not written yet. Press g to write one.", theme.MUTED),
+            prose.rule(width, "what it changed"),
+            prose.blank(),
+            prose.callout(written, width),
             prose.blank(),
         )
-    note = DESCRIPTION_NOTES.get(merge.description_source)
     return prose.join(
-        prose.line(merge.description, "white"),
-        prose.line(f"\n({note})", theme.MUTED) if note else None,
+        prose.rule(width, "what it changed"),
+        prose.blank(),
+        prose.line("Not summarised.", theme.MUTED),
+        prose.line(
+            "Backfilled history is left alone, which is what keeps it free.",
+            theme.FAINT,
+        ),
         prose.blank(),
     )
 
@@ -108,24 +126,35 @@ def _timings(merge: Merge) -> Text:
     )
 
 
-def detail_text(merge: Merge) -> Text:
-    """The full account of one merged pull request, for either tab."""
+def _size(merge: Merge) -> Text:
+    value = prose.churn(merge.additions, merge.deletions)
+    value.append(f" in {merge.changed_files} files", style=theme.MUTED)
+    return prose.field_text("size", value)
+
+
+def detail_text(merge: Merge, *, width: int = 0) -> Text:
+    """The full account of one merged pull request, for either tab.
+
+    Three sections, each announced by a rule: what it is, what it changed, and
+    what is on record about it.
+    """
     ours = "  (yours)" if merge.is_ours else ""
     return prose.join(
         prose.headline(merge.number, merge.title, prose.span(merge.repo, theme.MUTED)),
-        _summary_paragraph(merge),
+        prose.blank(2),
+        _summary_paragraph(merge, width),
+        prose.rule(width, "the change"),
+        prose.blank(),
         prose.field("author", f"@{merge.author}{ours}"),
         prose.field("merged by", f"@{merge.merged_by}") if merge.merged_by else None,
         prose.field("into", merge.base_ref or "?"),
-        prose.field(
-            "size",
-            f"{formatting.churn(merge.additions, merge.deletions)} "
-            f"in {merge.changed_files} files",
-        ),
+        _size(merge),
         _timings(merge),
+        prose.field_text("labels", prose.badges(merge.labels)) if merge.labels else None,
+        prose.blank(),
+        prose.rule(width, "our part in it"),
+        prose.blank(),
         _contribution(merge),
-        prose.field("labels", ", ".join(merge.labels)) if merge.labels else None,
-        prose.span("\npress o to open it on GitHub", theme.MUTED),
     )
 
 
@@ -181,8 +210,11 @@ class SummaryView(RecordView):
     def row_cells(self, record: Merge) -> Cells:
         return summary_cells(record, self._now)
 
-    def detail_text(self, record: Merge) -> Text:
-        return detail_text(record)
+    def detail_text(self, record: Merge, *, width: int = 0) -> Text:
+        return detail_text(record, width=width)
+
+    def actions(self, record: Merge | None) -> tuple[Action | None, Action | None]:
+        return merge_actions(record)
 
     def empty_text(self) -> Text:
         return prose.span(
@@ -212,6 +244,20 @@ HISTORY_COLUMNS = (
 )
 
 AUTHOR_FILTER_ID = "author_filter"
+
+WRITE_SUMMARY = Action(id="describe", label="Generate summary", key="g")
+
+
+def merge_actions(merge: Merge | None) -> tuple[Action | None, Action | None]:
+    """Buttons for a merged row: write the summary, and open it on GitHub.
+
+    The write button only appears where there is nothing written yet, so the
+    pane never offers to spend a model call on something already paid for.
+    """
+    if merge is None:
+        return (None, None)
+    primary = None if merge.described_by_model else WRITE_SUMMARY
+    return (primary, OPEN_ON_GITHUB if merge.url else None)
 DATE_FILTER_ID = "date_filter"
 
 #: The label beside the date picker, with its shortcut letter underlined — the
@@ -350,8 +396,8 @@ class HistoryView(RecordView):
     def row_cells(self, record: Merge) -> Cells:
         return history_cells(record)
 
-    def detail_text(self, record: Merge) -> Text:
-        return detail_text(record)
+    def detail_text(self, record: Merge, *, width: int = 0) -> Text:
+        return detail_text(record, width=width)
 
     def empty_text(self) -> Text:
         return history_empty(self._shown)
@@ -361,3 +407,6 @@ class HistoryView(RecordView):
 
     def pager_text(self) -> Text:
         return history_pager(self._shown)
+
+    def actions(self, record: Merge | None) -> tuple[Action | None, Action | None]:
+        return merge_actions(record)

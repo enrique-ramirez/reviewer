@@ -241,42 +241,57 @@ def _cost_lines(pull_request: PullRequest) -> Text | None:
 
 def _last_pass(pull_request: PullRequest) -> Text | None:
     if not status.reports_last_pass(pull_request):
-        return None
+        return prose.line("not looked at yet\n", theme.MUTED)
     return prose.join(
-        prose.line("\nlast pass", theme.MUTED),
-        prose.line(f"  {pull_request.last_action or 'not looked at yet'}"),
+        prose.line(pull_request.last_action or "not looked at yet"),
         _cost_lines(pull_request),
+        prose.blank(),
     )
 
 
-def detail_text(pull_request: PullRequest, now: float, frame: int) -> Text:
+def _size(pull_request: PullRequest) -> Text:
+    value = prose.churn(pull_request.additions, pull_request.deletions)
+    value.append(f" in {pull_request.changed_files} files", style=theme.MUTED)
+    return prose.field_text("size", value)
+
+
+def detail_text(
+    pull_request: PullRequest, now: float, frame: int, *, width: int = 0
+) -> Text:
+    """One open pull request, in three announced sections.
+
+    What is happening to it now, what it is, and what this tool has done about
+    it — in that order, because the first is why you looked.
+    """
     verdict = status.status_of(pull_request)
     merge = status.merge_state(pull_request)
     ci = status.ci_state(pull_request)
     return prose.join(
         prose.headline(pull_request.number, pull_request.title, _byline(pull_request)),
+        prose.blank(2),
         _activity_line(pull_request, now, frame),
         _flag_lines(pull_request),
+        prose.rule(width, "the change"),
+        prose.blank(),
         prose.field("status", verdict.text, verdict.style),
         _open_for(pull_request, now),
         prose.field(
             "branch",
             f"{pull_request.base_ref} ← {pull_request.head_sha[:SHA_WIDTH]}",
         ),
-        prose.field(
-            "size",
-            f"{formatting.churn(pull_request.additions, pull_request.deletions)} "
-            f"in {pull_request.changed_files} files",
-        ),
+        _size(pull_request),
         prose.field("merge", merge.text, merge.style),
         prose.field("ci", ci.text, ci.style),
-        prose.field("labels", ", ".join(pull_request.labels))
+        prose.field_text("labels", prose.badges(pull_request.labels))
         if pull_request.labels
         else None,
         _reviewers(pull_request),
         _threads(pull_request),
+        prose.blank(),
+        prose.rule(width, "our part in it"),
+        prose.blank(),
         _last_pass(pull_request),
-        prose.span(f"\nseen {formatting.ago(now - pull_request.seen_at)}", theme.MUTED),
+        prose.span(f"seen {formatting.ago(now - pull_request.seen_at)}", theme.MUTED),
     )
 
 
@@ -309,8 +324,8 @@ class BoardView(RecordView):
     def row_cells(self, record: PullRequest) -> Cells:
         return row_cells(record, self._now, self._frame)
 
-    def detail_text(self, record: PullRequest) -> Text:
-        return detail_text(record, self._now, self._frame)
+    def detail_text(self, record: PullRequest, *, width: int = 0) -> Text:
+        return detail_text(record, self._now, self._frame, width=width)
 
     def empty_text(self) -> Text:
         return prose.span("waiting for the first scan…", theme.MUTED)

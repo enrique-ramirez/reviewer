@@ -18,6 +18,9 @@ from reviewer.tui import formatting
 from reviewer.tui.models import Merge, PullRequest, ReviewCost
 from reviewer.tui.views import board
 
+#: The section a pane files what this tool did under.
+OUR_PART = "our part in it"
+
 CLAUDE_USAGE = {
     "input_tokens": 120,
     "cache_creation_input_tokens": 21_015,
@@ -177,7 +180,7 @@ class Rendering(unittest.TestCase):
 
     def test_a_review_from_before_any_of_this_shows_no_cost_line(self):
         text = board.detail_text(pull_request(None), time.time(), 0).plain
-        self.assertIn("last pass", text)
+        self.assertIn(OUR_PART, text)
         self.assertNotIn("$", text)
         self.assertNotIn("cached", text)
 
@@ -185,7 +188,7 @@ class Rendering(unittest.TestCase):
         cost = ReviewCost(calls=1, seconds=63.0, provider="codex")
         text = board.detail_text(pull_request(cost), time.time(), 0).plain
         self.assertIn("1m 03s", text)
-        self.assertNotIn("out", text.split("last pass")[1])
+        self.assertNotIn("out", text.split(OUR_PART)[1])
         self.assertNotIn("$", text)
 
     def test_one_call_is_not_announced_as_a_count(self):

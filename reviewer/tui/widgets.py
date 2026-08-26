@@ -7,8 +7,9 @@ from typing import Any, Callable, Mapping, Sequence
 
 from rich.text import Text
 from textual.binding import Binding
-from textual.containers import VerticalScroll
-from textual.widgets import DataTable, Static
+from textual.containers import Horizontal, VerticalScroll
+from textual.app import ComposeResult
+from textual.widgets import Button, DataTable, Static
 
 from . import theme
 from .formatting import elapsed
@@ -111,6 +112,52 @@ class DetailPane(VerticalScroll):
 
     def show(self, text: Text) -> None:
         self._body.update(text)
+
+
+@dataclass(frozen=True, slots=True)
+class Action:
+    """A button under the detail pane, and the key that does the same thing."""
+
+    id: str
+    label: str
+    key: str
+
+    @property
+    def markup(self) -> str:
+        """The label with its shortcut letter underlined, as the tabs do it.
+
+        The first occurrence only: "Open on GitHub" underlines the O it starts
+        with, not the one in "on".
+        """
+        index = self.label.lower().find(self.key.lower())
+        if index < 0:
+            return f"{self.label} ({self.key})"
+        letter = self.label[index]
+        return f"{self.label[:index]}[u]{letter}[/u]{self.label[index + 1:]}"
+
+
+class ActionBar(Horizontal):
+    """The row of buttons under a detail pane: one left, one right.
+
+    Two slots rather than a list, because there are only ever two kinds of thing
+    to offer — something to do with this record, and the way out to GitHub — and
+    a fixed pair keeps them from shuffling about as the cursor moves.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+    def compose(self) -> ComposeResult:
+        yield Button("", id="action-primary", compact=True, classes="action")
+        yield Button("", id="action-open", compact=True, classes="action")
+
+    def show(self, primary: Action | None, secondary: Action | None) -> None:
+        for slot, action in (("primary", primary), ("open", secondary)):
+            button = self.query_one(f"#action-{slot}", Button)
+            button.display = action is not None
+            if action is not None:
+                button.label = action.markup
+                button.tooltip = f"{action.label}  ({action.key})"
 
 
 class StatusBar(Static):

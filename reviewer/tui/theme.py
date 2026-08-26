@@ -22,6 +22,18 @@ FAINT = "grey50"
 HEADING = "bold"
 KEY = "bold cyan"
 
+# A label is a thing the team put on a pull request, not a sentence. Giving it
+# a background makes it read as an object you could pick up, the way it does on
+# GitHub, rather than as more comma-separated prose.
+BADGE = "grey85 on grey27"
+BADGE_WARN = "black on yellow"
+
+# Churn, in the two colours every diff already uses.
+ADDED = "green"
+REMOVED = "red"
+
+RULE = "grey30"
+
 # Single-width glyphs throughout: emoji are double-width in some terminals and
 # would break the table's column alignment.
 PAC_OPEN = "ᗧ"

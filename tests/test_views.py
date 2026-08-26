@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from reviewer import backfill
-from reviewer.tui import theme
+from reviewer.tui import prose, theme
 from reviewer.tui.data import MergePage
 from reviewer.tui.filling import BackfillStatus, in_flight_lines, progress_note
 from reviewer.tui.models import Activity
@@ -238,3 +238,101 @@ class Signatures(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Panels(unittest.TestCase):
+    """The detail panes, after they were given some structure."""
+
+    def test_sections_are_announced_rather_than_implied(self) -> None:
+        text = merges.detail_text(merge(), width=50).plain
+        for heading in ("what it changed", "the change", "our part in it"):
+            self.assertIn(heading, text)
+
+    def test_a_backfilled_row_does_not_repeat_its_own_title(self) -> None:
+        # The title is already the headline two lines up; printing it again as
+        # a summary said the same thing twice and looked like content.
+        row = merge(
+            title="ci: add retention policy",
+            description="ci: add retention policy",
+            description_source="title",
+        )
+        text = merges.detail_text(row, width=50).plain
+        self.assertEqual(text.count("ci: add retention policy"), 1)
+        self.assertIn("Not summarised", text)
+
+    def test_a_written_summary_gets_a_bar_down_its_edge(self) -> None:
+        row = merge(description="It bounded the retry.", description_source="model")
+        text = merges.detail_text(row, width=50).plain
+        self.assertIn(f"{theme.CURSOR} It bounded the retry.", text)
+
+    def test_a_long_summary_keeps_the_bar_on_every_line(self) -> None:
+        # A bar drawn once above a paragraph that then wraps is a bar against
+        # one line of it.
+        row = merge(description=" ".join(["word"] * 60), description_source="model")
+        body = merges.detail_text(row, width=50).plain
+        lines = [ln for ln in body.splitlines() if "word" in ln]
+        self.assertGreater(len(lines), 1)
+        self.assertTrue(all(ln.startswith(theme.CURSOR) for ln in lines))
+
+    def test_labels_are_drawn_as_badges(self) -> None:
+        # Padded and backgrounded, so a label reads as an object rather than as
+        # more comma-separated prose.
+        badges = prose.badges(["i18n", "automation"])
+        self.assertEqual(badges.plain, " i18n   automation ")
+        self.assertTrue(
+            all(str(span.style) == theme.BADGE for span in badges.spans),
+            f"expected every badge styled {theme.BADGE}: {badges.spans}",
+        )
+        self.assertIn(" i18n ", merges.detail_text(merge(labels=["i18n"]), width=50).plain)
+
+    def test_churn_is_green_and_red(self) -> None:
+        churn = prose.churn(283, 14)
+        self.assertEqual(churn.plain, "+283 −14")
+        added, removed = churn.spans
+        self.assertEqual(str(added.style), theme.ADDED)
+        self.assertEqual(str(removed.style), theme.REMOVED)
+
+    def test_the_key_hint_is_gone_from_the_prose(self) -> None:
+        # It is a button now; saying it twice is how the two drift apart.
+        text = merges.detail_text(merge(), width=50).plain
+        self.assertNotIn("press o", text)
+        self.assertNotIn("press g", text)
+
+
+class PanelActions(unittest.TestCase):
+    def test_a_merge_without_a_summary_offers_to_write_one(self) -> None:
+        primary, secondary = merges.merge_actions(
+            merge(description="", description_source="")
+        )
+        self.assertEqual(primary, merges.WRITE_SUMMARY)
+        self.assertIsNotNone(secondary)
+
+    def test_one_that_has_a_summary_does_not(self) -> None:
+        primary, _ = merges.merge_actions(
+            merge(description="written", description_source="model")
+        )
+        self.assertIsNone(primary, "never offer to buy the same sentence twice")
+
+    def test_nothing_selected_offers_nothing(self) -> None:
+        self.assertEqual(merges.merge_actions(None), (None, None))
+
+    def test_a_row_with_no_link_has_nowhere_to_open(self) -> None:
+        _, secondary = merges.merge_actions(merge(url=""))
+        self.assertIsNone(secondary)
+
+    def test_the_shortcut_letter_is_underlined(self) -> None:
+        from reviewer.tui.widgets import Action
+
+        self.assertEqual(
+            Action("open", "Open on GitHub", "o").markup, "[u]O[/u]pen on GitHub"
+        )
+        self.assertEqual(
+            Action("describe", "Generate summary", "g").markup,
+            "[u]G[/u]enerate summary",
+        )
+
+    def test_a_label_without_its_letter_still_says_the_key(self) -> None:
+        from reviewer.tui.widgets import Action
+
+        self.assertEqual(Action("x", "Do it", "z").markup, "Do it (z)")
+

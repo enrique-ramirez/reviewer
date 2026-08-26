@@ -31,6 +31,7 @@ from textual.widgets._header import HeaderClock, HeaderIcon, HeaderTitle
 from textual.widgets import (
     Footer,
     Header,
+    Button,
     Input,
     RichLog,
     Select,
@@ -497,6 +498,22 @@ class Dashboard(App[None]):
             return
         self.session = self.session.with_attention_only(not self.session.only_attention)
         self._reload_board(time.time())
+
+    @on(Button.Pressed, ".action")
+    def _action_button(self, event: Button.Pressed) -> None:
+        """A button does exactly what its key does, and nothing of its own.
+
+        One implementation per action, reachable two ways, so the two can never
+        drift apart.
+        """
+        event.stop()
+        if event.button.id == "action-open":
+            self.action_open()
+        elif event.button.id == "action-primary":
+            self.action_describe()
+        # Clicking a button takes focus with it, which would leave every letter
+        # key inert until the reader worked out why.
+        self.view.table.focus()
 
     def action_open(self) -> None:
         record = self.view.current

@@ -15,7 +15,17 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable
 
-from ..widgets import Cells, Column, DetailPane, StatusBar, SyncedTable
+from ..widgets import (
+    Action,
+    ActionBar,
+    Cells,
+    Column,
+    DetailPane,
+    StatusBar,
+    SyncedTable,
+)
+
+OPEN_ON_GITHUB = Action(id="open", label="Open on GitHub", key="o")
 
 
 class RecordView(Vertical):
@@ -46,6 +56,7 @@ class RecordView(Vertical):
                 yield from self.overlays()
             with Vertical(classes="details"):
                 yield DetailPane()
+                yield ActionBar(classes="actions")
 
     def filters(self) -> Iterable[Any]:
         """Controls that sit at the right-hand end of the status line."""
@@ -62,6 +73,10 @@ class RecordView(Vertical):
     @property
     def detail(self) -> DetailPane:
         return self.query_one(DetailPane)
+
+    @property
+    def action_bar(self) -> ActionBar:
+        return self.query_one(ActionBar)
 
     @property
     def status_bar(self) -> StatusBar:
@@ -89,9 +104,14 @@ class RecordView(Vertical):
 
     def redraw_detail(self) -> None:
         record = self.current
+        width = self.detail.content_size.width
         self.detail.show(
-            self.empty_text() if record is None else self.detail_text(record)
+            self.empty_text()
+            if record is None
+            else self.detail_text(record, width=width)
         )
+        primary, secondary = self.actions(record)
+        self.action_bar.show(primary, secondary)
 
     def redraw_status(self) -> None:
         self.status_bar.update(self.status_text())
@@ -107,8 +127,18 @@ class RecordView(Vertical):
     def row_cells(self, record: Any) -> Cells:
         raise NotImplementedError
 
-    def detail_text(self, record: Any) -> Text:
+    def detail_text(self, record: Any, *, width: int = 0) -> Text:
         raise NotImplementedError
+
+    def actions(self, record: Any) -> tuple[Action | None, Action | None]:
+        """The two buttons under the pane: something to do, and the way out.
+
+        A record with no URL offers neither — an empty pane should not carry a
+        button that cannot work.
+        """
+        if record is None or not getattr(record, "url", ""):
+            return (None, None)
+        return (None, OPEN_ON_GITHUB)
 
     def empty_text(self) -> Text:
         raise NotImplementedError

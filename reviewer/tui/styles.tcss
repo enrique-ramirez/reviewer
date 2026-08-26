@@ -160,3 +160,26 @@ StatusBar {
 #date_filter {
     width: 14;
 }
+
+/* The buttons under a detail pane: what to do with this record on the left,
+   the way out to GitHub on the right. Compact, because a three-row button
+   under a pane reads as a dialog rather than as an affordance. */
+.actions {
+    height: 1;
+    padding: 0 1;
+    align-horizontal: left;
+}
+.actions Button {
+    min-width: 0;
+    border: none;
+    height: 1;
+    background: $panel-lighten-1;
+    color: $text-muted;
+}
+.actions Button:hover {
+    background: $accent;
+    color: $text;
+}
+.actions #action-open {
+    dock: right;
+}

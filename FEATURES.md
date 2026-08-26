@@ -90,7 +90,14 @@ the open list having been merged, it moves here with a sentence on *what actuall
 changed*.
 
 Each entry carries the size, the author, who merged it, how long it stayed open,
-and how many comments we left before it landed. Press `o` to open it on GitHub.
+and how many comments we left before it landed.
+
+The detail pane is three named sections — **what it changed**, **the change**,
+**our part in it** — with the summary given a bar down its edge, because on a
+merged pull request that sentence is the thing you came to read and everything
+else is context for it. Underneath sit two buttons: whatever there is to do with
+this record on the left, the way out to GitHub on the right. Each one underlines
+its shortcut, and does exactly what that key does.
 
 This tab is close to free. Only pull requests we reviewed are looked up, so a
 merge nobody asked us about costs nothing; the summary is one small call with no
