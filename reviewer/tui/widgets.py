@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from rich.text import Text
+from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.widgets import DataTable, Static
 
@@ -37,6 +38,14 @@ class SyncedTable(DataTable):
     the cells that actually differ are written one at a time — which is what lets
     a status turning into "reviewing" appear without the board flickering.
     """
+
+    # DataTable binds these to scrolling within itself, which swallows them
+    # before the app sees them. A page here is exactly one screenful, so there
+    # is nothing to scroll and "page down" can only sensibly mean the next page.
+    BINDINGS = [
+        Binding("pagedown", "app.page_forward", "Next page", show=False),
+        Binding("pageup", "app.page_back", "Prev page", show=False),
+    ]
 
     def __init__(self, columns: Sequence[Column], **kwargs: Any) -> None:
         super().__init__(cursor_type="row", zebra_stripes=True, **kwargs)

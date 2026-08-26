@@ -14,12 +14,13 @@ from dataclasses import dataclass, replace
 from typing import Any, Iterable
 
 from rich.text import Text
-from textual.widgets import Input
+from textual.containers import Horizontal
+from textual.widgets import Input, Label, Select
 
 from .. import formatting, prose, theme
 from ..data import MergePage
 from ..models import Merge
-from ..session import Session
+from ..session import WINDOWS, Session
 from ..widgets import Cells, Column
 from .base import RecordView
 
@@ -211,6 +212,11 @@ HISTORY_COLUMNS = (
 )
 
 AUTHOR_FILTER_ID = "author_filter"
+DATE_FILTER_ID = "date_filter"
+
+#: The label beside the date picker, with its shortcut letter underlined — the
+#: same convention the tab bar uses.
+DATE_LABEL = "da[u]t[/u]es"
 
 
 def history_cells(merge: Merge) -> Cells:
@@ -243,14 +249,12 @@ def history_status(context: HistoryContext) -> Text:
         prose.span("  "),
         prose.span(f"{page.total:,} merged", theme.KEY),
         _scope_span(session) if session.multi_repo else None,
-        prose.span(f"   {session.window_label}", theme.MUTED),
         prose.span(f"   author ~ {session.author}", theme.NEEDS_YOU)
         if session.author
         else None,
         prose.span(f"   page {page.number + 1}/{page.pages}", theme.MUTED)
         if page.pages > 1
         else None,
-        prose.span("   / author · t dates · [ ] page · b fill", theme.FAINT),
     )
 
 
@@ -298,14 +302,42 @@ class HistoryView(RecordView):
         )
 
     def extras(self) -> Iterable[Any]:
-        return (Input(placeholder="author contains…", id=AUTHOR_FILTER_ID),)
+        return (
+            Horizontal(
+                Label(DATE_LABEL, id="date_label"),
+                Select(
+                    [(label, index) for index, (label, _) in enumerate(WINDOWS)],
+                    value=0,
+                    allow_blank=False,
+                    compact=True,
+                    id=DATE_FILTER_ID,
+                ),
+                id="history_filters",
+            ),
+            Input(placeholder="author contains…", id=AUTHOR_FILTER_ID),
+        )
 
     @property
     def author_box(self) -> Input:
         return self.query_one(f"#{AUTHOR_FILTER_ID}", Input)
 
+    @property
+    def dates(self) -> Select:
+        """The date-range picker. Shows the current range as well as setting it."""
+        return self.query_one(f"#{DATE_FILTER_ID}", Select)
+
+    @property
+    def page(self) -> MergePage:
+        """Which slice of the history is on screen, and how many there are."""
+        return self._shown.page
+
     def show(self, context: HistoryContext) -> None:
         self._shown = context
+        # Keep the picker showing what is actually being filtered — Escape
+        # clears the filters from elsewhere, and the control has to follow.
+        picker = self.dates
+        if picker.value != context.session.window:
+            picker.value = context.session.window
         super().show(context.page.merges)
 
     def update_note(self, note: Text | None) -> None:

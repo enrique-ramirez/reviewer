@@ -159,7 +159,10 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
     async def test_history_filters_narrow_and_clear(self) -> None:
         app = self._app()
         async with app.run_test() as pilot:
-            await pilot.press("h", "t")
+            await pilot.press("h")
+            await pilot.pause()
+            app.history.dates.value = 1
+            await pilot.pause()
             self.assertEqual(app.session.window, 1)
 
             await pilot.press("slash")
@@ -478,3 +481,287 @@ class FakeSummariser:
 
     def cancel(self) -> None:
         pass
+
+
+class Paging(unittest.IsolatedAsyncioTestCase):
+    """Moving through a history too long to hold on one screen.
+
+    The bug behind these: the cursor stopped dead at the last row of a page,
+    which reads as "that is all there is" to someone with sixty-three more
+    pages, and the only way onward was a key hidden from the footer.
+    """
+
+    ROWS = 100
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        for i in range(self.ROWS):
+            self.store.record_merged(
+                {
+                    "repo": "acme/widgets",
+                    "pr_number": 1900 - i,
+                    "title": f"PR {1900 - i}",
+                    "author": "ada",
+                    "url": "https://example.invalid",
+                    "merged_at": self.now - i * 3600,
+                    "recorded_at": self.now,
+                }
+            )
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self) -> Dashboard:
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=("acme/widgets",),
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+            )
+        )
+
+    async def _history(self, pilot, app) -> None:
+        await pilot.press("h")
+        # Twice: the page is re-fitted once the tab has a height to measure.
+        await pilot.pause()
+        await pilot.pause()
+
+    async def test_a_page_fills_the_window_it_is_given(self) -> None:
+        seen = {}
+        for height in (50, 30):
+            app = self._app()
+            async with app.run_test(size=(120, height)) as pilot:
+                await self._history(pilot, app)
+                seen[height] = app.history.page.size
+                self.assertEqual(len(app.view.records), seen[height])
+        self.assertGreater(
+            seen[50], seen[30], "a taller window should hold more history"
+        )
+
+    async def test_the_cursor_carries_on_to_the_next_page(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(120, 50)) as pilot:
+            await self._history(pilot, app)
+            size = app.history.page.size
+            first = app.view.current.number
+            for _ in range(size):
+                await pilot.press("j")
+            await pilot.pause()
+            self.assertEqual(app.session.page, 1)
+            self.assertEqual(app.view.current.number, first - size)
+
+    async def test_and_back_again_lands_where_it_started(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(120, 50)) as pilot:
+            await self._history(pilot, app)
+            size = app.history.page.size
+            for _ in range(size):
+                await pilot.press("j")
+            await pilot.pause()
+            await pilot.press("k")
+            await pilot.pause()
+            self.assertEqual(app.session.page, 0)
+            self.assertEqual(app.view.current.number, 1900 - (size - 1))
+
+    async def test_it_stops_at_the_end_of_the_history(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(120, 50)) as pilot:
+            await self._history(pilot, app)
+            last = app.history.page.pages - 1
+            for _ in range(self.ROWS + 20):
+                await pilot.press("j")
+            await pilot.pause()
+            self.assertEqual(app.session.page, last)
+
+    async def test_page_keys_that_exist_on_every_keyboard(self) -> None:
+        # `[` and `]` need a modifier on several non-US layouts, so they cannot
+        # be the only way through.
+        app = self._app()
+        async with app.run_test(size=(120, 50)) as pilot:
+            await self._history(pilot, app)
+            await pilot.press("pagedown")
+            await pilot.pause()
+            self.assertEqual(app.session.page, 1)
+            await pilot.press("pageup")
+            await pilot.pause()
+            self.assertEqual(app.session.page, 0)
+
+    async def test_the_dashboard_cursor_is_left_alone(self) -> None:
+        # Rolling is a History idea; the board is one unpaged list.
+        app = self._app()
+        async with app.run_test(size=(120, 50)) as pilot:
+            await pilot.press("d")
+            for _ in range(10):
+                await pilot.press("j")
+            await pilot.pause()
+            self.assertEqual(app.session.page, 0)
+
+
+class DatePicker(unittest.IsolatedAsyncioTestCase):
+    """The date range, which used to be a blind four-way cycle on `t`."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        for i in range(40):
+            self.store.record_merged(
+                {
+                    "repo": "acme/widgets",
+                    "pr_number": 100 - i,
+                    "title": f"PR {100 - i}",
+                    "author": "ada",
+                    "url": "https://example.invalid",
+                    # Spread across months, so a narrow range really is narrower.
+                    "merged_at": self.now - i * 4 * 86400,
+                    "recorded_at": self.now,
+                }
+            )
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self) -> Dashboard:
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=("acme/widgets",),
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+            )
+        )
+
+    async def _open(self, pilot) -> None:
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.pause()
+
+    async def test_t_opens_the_list_rather_than_guessing_for_you(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self._open(pilot)
+            await pilot.press("t")
+            await pilot.pause()
+            self.assertTrue(app.history.dates.expanded)
+
+    async def test_choosing_a_range_narrows_the_history(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self._open(pilot)
+            everything = app.history.table.row_count
+            await pilot.press("t", "down", "enter")
+            await pilot.pause()
+            await pilot.pause()
+            self.assertEqual(app.session.window_label, "last 7 days")
+            self.assertLess(app.history.table.row_count, everything)
+
+    async def test_it_hands_the_keyboard_back_when_you_are_done(self) -> None:
+        # Leaving focus in the picker would leave every letter key inert.
+        app = self._app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self._open(pilot)
+            await pilot.press("t", "down", "enter")
+            await pilot.pause()
+            await pilot.pause()
+            self.assertTrue(app.history.table.has_focus)
+
+    async def test_letter_keys_do_not_leak_through_an_open_list(self) -> None:
+        # `q` quitting from under an open dropdown would be a trap.
+        app = self._app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self._open(pilot)
+            await pilot.press("t")
+            await pilot.pause()
+            self.assertTrue(app.typing)
+            before = app.session.window
+            await pilot.press("g", "b", "r")
+            await pilot.pause()
+            self.assertEqual(app.session.window, before)
+            self.assertTrue(app.history.dates.expanded)
+
+    async def test_escape_closes_the_list_then_leaves_the_control(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self._open(pilot)
+            await pilot.press("t")
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            self.assertFalse(app.history.dates.expanded)
+            await pilot.press("escape")
+            await pilot.pause()
+            self.assertTrue(app.history.table.has_focus)
+
+    async def test_clearing_the_filters_moves_the_picker_back(self) -> None:
+        # The control shows the range as well as setting it, so it has to
+        # follow a change made from anywhere else.
+        app = self._app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self._open(pilot)
+            await pilot.press("t", "down", "enter")
+            await pilot.pause()
+            await pilot.pause()
+            self.assertEqual(app.history.dates.value, 1)
+            await pilot.press("escape")
+            await pilot.pause()
+            await pilot.pause()
+            self.assertFalse(app.session.filtered)
+            self.assertEqual(app.history.dates.value, 0)
+
+
+class Footer(unittest.IsolatedAsyncioTestCase):
+    """The one place the keys are listed, now the dim hint line is gone."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        _seed(self.store, self.now)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _shown(self, app: Dashboard) -> dict[str, str]:
+        return {
+            value.binding.key_display or value.binding.key: value.binding.description
+            for value in app.active_bindings.values()
+            if value.binding.show
+        }
+
+    async def test_the_page_keys_are_offered_on_history(self) -> None:
+        app = Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+            )
+        )
+        async with app.run_test(size=(200, 40)) as pilot:
+            await pilot.press("h")
+            await pilot.pause()
+            shown = self._shown(app)
+            self.assertIn("[", shown)
+            self.assertIn("]", shown)
+            self.assertIn("t", shown)
+            # And read as symbols rather than as key names.
+            self.assertIn("/", shown)
+            self.assertNotIn("slash", shown)
+
+            await pilot.press("d")
+            await pilot.pause()
+            board = self._shown(app)
+            self.assertNotIn("[", board, "paging means nothing on the board")
+            self.assertNotIn("t", board)

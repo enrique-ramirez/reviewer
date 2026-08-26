@@ -267,6 +267,20 @@ def run(
     return result
 
 
+def _outcome(filed: int, scanned: int) -> str:
+    """What to say when a sweep ends.
+
+    "0 added" is true and useless: it is what a re-run of a repository already
+    on record says, and it reads as failure. What the user wants to know is
+    whether anything was missing, so say that instead.
+    """
+    if filed:
+        return f"{filed:,} added to the history"
+    if scanned:
+        return f"already up to date — {scanned:,} checked, nothing missing"
+    return "nothing found to add"
+
+
 class Runner:
     """Drives a backfill from the interface, off the event loop.
 
@@ -386,12 +400,17 @@ class Runner:
 
             self._set(phase="running")
             filed = 0
+            scanned = 0
             for cfg, item in plans:
                 if self._stop.is_set():
                     break
 
-                def progress(f: int, s: int, base: int = filed) -> None:
-                    self._set(filed=base + f, scanned=s)
+                # Both totals carry across repositories, so a second repository
+                # continues the count rather than restarting it.
+                def progress(
+                    f: int, s: int, filed_before: int = filed, seen_before: int = scanned
+                ) -> None:
+                    self._set(filed=filed_before + f, scanned=seen_before + s)
 
                 result = run(
                     self.graphql,
@@ -402,15 +421,18 @@ class Runner:
                     should_stop=self._stop.is_set,
                 )
                 filed += result.filed
-                self._set(filed=filed)
+                scanned += result.scanned
+                self._set(filed=filed, scanned=scanned)
                 for message in result.errors:
                     log.get().warning("%s: backfill: %s", cfg.repo, message)
 
             stopped = " (stopped)" if self._stop.is_set() else ""
-            self._set(
-                phase="done", message=f"{filed:,} added to the history{stopped}"
+            self._set(phase="done", message=_outcome(filed, scanned) + stopped)
+            log.get().info(
+                "backfill finished — %d added, %d already on record",
+                filed,
+                scanned - filed,
             )
-            log.get().info("backfill finished — %d added to the history", filed)
         except Exception as exc:  # noqa: BLE001 - a dead thread must not hang the UI
             log.get().exception("backfill failed: %s", exc)
             self._set(phase="error", message=str(exc)[:200])

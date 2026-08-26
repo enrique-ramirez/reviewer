@@ -95,8 +95,20 @@ fetched at all.
 
 The same record without the time limit, across every repository you watch.
 Filter by author with `/` — which answers "what has this person shipped since
-March" — narrow the date range with `t`, page with `[` and `]`, and clear the lot
+March" — pick a date range from the **dates** control with `t`, and clear the lot
 with `Escape`.
+
+The date control shows the range as well as setting it, so there is no separate
+label to read to find out where you landed, and no cycling through four options
+to reach the one you wanted. `t` opens the list; the arrows and `Enter` choose;
+`Escape` backs out. Picking one hands the keyboard back to the table.
+
+It is paged rather than scrolled: a page is however many rows your window can
+show, and only that many are read from the database, so a history of two thousand
+merges costs the same to open as one of twenty. **Moving down past the last row
+turns the page** — `j` and the arrows carry on rather than stopping — and `[` /
+`]` or `PgUp` / `PgDn` jump a page at a time. The status line says which page of
+how many you are on, which is the thing an endless scroll cannot tell you.
 
 It lives in the same SQLite database as the rest of the state, under
 `~/.local/state/pr-reviewer/`, and outlives the pull requests it describes.
@@ -104,7 +116,9 @@ It lives in the same SQLite database as the rest of the state, under
 ### Keys
 
 The footer follows the tab you are on, so it only ever offers keys that do
-something where you are.
+something where you are — and it is the only place the keys are listed. There
+used to be a second, dimmer list above the status line; two copies of the same
+thing meant the one you could read was the one that was out of date.
 
 | key | tab | does |
 | --- | --- | --- |
@@ -116,8 +130,9 @@ something where you are.
 | `q` | any | quit — it asks first, and says what it is about to throw away |
 | `a` | Dashboard | show only what needs you |
 | `/` | History | filter by author |
-| `t` | History | cycle date range |
-| `[` `]` | History | page |
+| `t` | History | open the date-range picker |
+| `[` `]` / `PgUp` `PgDn` | History | turn the page |
+| `j` / `k` at a page edge | History | carries on to the next page |
 | `b` | History | fill in past history (press again to stop) |
 | `g` | History | write a summary for the selected merge — one model call |
 | `Escape` | History | clear the filters |

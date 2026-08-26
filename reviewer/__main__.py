@@ -469,7 +469,7 @@ def _run_with_tui(
         open_store=lambda: state.Store(state_dir, db_name),
         global_cfg=global_cfg,
         repos=repos,
-        dry_run=dry_run,
+        dry_run=args.dry_run,
     )
     try:
         tui.run(

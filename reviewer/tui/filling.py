@@ -22,6 +22,7 @@ FINISHED = ("done", "error")
 class BackfillStatus:
     phase: str = "idle"
     filed: int = 0
+    scanned: int = 0
     total: int = 0
     requests: int = 0
     lines: tuple[str, ...] = ()
@@ -52,6 +53,7 @@ class BackfillStatus:
         return cls(
             phase=str(status.get("phase") or "idle"),
             filed=int(status.get("filed") or 0),
+            scanned=int(status.get("scanned") or 0),
             total=int(status.get("total") or 0),
             requests=int(status.get("requests") or 0),
             lines=tuple(str(line) for line in status.get("lines") or ()),
@@ -66,9 +68,13 @@ def progress_note(status: BackfillStatus, frame: int) -> Text | None:
     spinner = theme.spinner_frame(frame)
     if status.estimating:
         return prose.span(f"  {spinner} working out how much there is…", theme.LIVE)
+    # Counts what has been *checked*, not what was new. A repository already on
+    # record files nothing, so a filed-based bar sits at 0 for the whole sweep
+    # and is indistinguishable from a hang — which is exactly how it read.
     return prose.join(
-        prose.span(f"  {spinner} filling history — {status.filed:,}", theme.LIVE),
+        prose.span(f"  {spinner} filling history — {status.scanned:,}", theme.LIVE),
         prose.span(f" of about {status.total:,}", theme.MUTED) if status.total else None,
+        prose.span(f" · {status.filed:,} new", theme.MUTED) if status.filed else None,
         prose.span("   b to stop", theme.FAINT),
     )
 
@@ -80,9 +86,9 @@ def in_flight_lines(status: BackfillStatus) -> tuple[Text, ...]:
     if status.phase != "running":
         return ()
     counted = (
-        f"   {status.filed:,} of about {status.total:,}"
+        f"   {status.scanned:,} of about {status.total:,}"
         if status.total
-        else f"   {status.filed:,} so far"
+        else f"   {status.scanned:,} checked so far"
     )
     return (
         prose.join(

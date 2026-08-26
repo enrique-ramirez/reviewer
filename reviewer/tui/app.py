@@ -30,6 +30,7 @@ from textual.widgets import (
     Header,
     Input,
     RichLog,
+    Select,
     TabbedContent,
     TabPane,
 )
@@ -92,7 +93,7 @@ class Dashboard(App[None]):
         Binding("h", f"show_tab('{HISTORY}')", "History", show=False),
         Binding("enter,o", "open", "Open in browser"),
         Binding("a", "toggle_filter", "Only needs me"),
-        Binding("slash", "author_filter", "Filter author"),
+        Binding("slash", "author_filter", "Filter author", key_display="/"),
         Binding("t", "cycle_window", "Date range"),
         Binding("e", "focus_repos", "Repos"),
         Binding("E", "toggle_repos", "Fold repos"),
@@ -100,8 +101,12 @@ class Dashboard(App[None]):
         Binding("g", "describe", "Summarise"),
         Binding("l", "toggle_log", "Log"),
         Binding("r", "reload", "Refresh"),
-        Binding("left_square_bracket", "page_back", "Prev page", show=False),
-        Binding("right_square_bracket", "page_forward", "Next page", show=False),
+        # Shown, not hidden: the footer is the only place the keys are listed
+        # now, and a paging key nobody can find is a history nobody can read.
+        Binding("left_square_bracket,pageup", "page_back", "Prev page",
+                key_display="["),
+        Binding("right_square_bracket,pagedown", "page_forward", "Next page",
+                key_display="]"),
         Binding("j,down", "cursor_down", "Down", show=False),
         Binding("k,up", "cursor_up", "Up", show=False),
     ]
@@ -201,8 +206,27 @@ class Dashboard(App[None]):
 
     @property
     def typing(self) -> bool:
-        """True while the author box has focus, so letter keys stay letters."""
-        return isinstance(self.focused, Input)
+        """True while a filter control has focus, so letter keys stay letters.
+
+        Covers the date picker as well as the author box: an open dropdown that
+        let `q` quit underneath it would be a trap.
+        """
+        return isinstance(self.focused, Input) or self.picking
+
+    @property
+    def picking(self) -> bool:
+        """Whether the date picker has the keyboard.
+
+        Expanding a Select moves focus into an overlay rather than keeping it on
+        the control, so asking what is focused is not enough — the question is
+        whether focus is anywhere inside it.
+        """
+        focused = self.focused
+        if focused is None:
+            return False
+        if isinstance(focused, Select):
+            return True
+        return any(isinstance(node, Select) for node in focused.ancestors)
 
     @property
     def asking(self) -> bool:
@@ -256,8 +280,44 @@ class Dashboard(App[None]):
             data.merges_this_run(self.runtime.store, self.session), now=now
         )
 
+    @on(TabbedContent.TabActivated)
+    def _refit_history(self) -> None:
+        """Re-fit the page once History is actually on screen.
+
+        A hidden tab has no height, so the page size worked out while the
+        Dashboard was showing is the fallback rather than the real one. Without
+        this the first view of History is a short page that grows a second later.
+        """
+        if self.tab == HISTORY:
+            self.call_after_refresh(self._reload_history, time.time())
+
+    def on_resize(self, _event: Any) -> None:
+        """Re-fit the history page when the window changes shape.
+
+        How many rows fit is how big a page is, so a resize changes the answer.
+        The poll would catch it within a second; doing it here means the first
+        frame after startup is already the right size rather than a short page
+        that grows.
+        """
+        try:
+            self._reload_history(time.time())
+        except NoMatches:
+            # Resize arrives before compose has finished on the first frame.
+            pass
+
+    def _history_rows(self) -> int:
+        """How many rows the history table has room for right now.
+
+        Zero while the widget is still being laid out, which is why there is a
+        default to fall back to rather than a page of nothing.
+        """
+        height = self.history.table.size.height
+        return (height - 1) if height > 1 else data.PAGE_SIZE
+
     def _reload_history(self, now: float) -> None:
-        page = data.merge_history(self.runtime.store, self.session, now)
+        page = data.merge_history(
+            self.runtime.store, self.session, now, self._history_rows()
+        )
         self.session = self.session.with_page(page.number)
         self.history.show(
             HistoryContext(
@@ -383,8 +443,37 @@ class Dashboard(App[None]):
         # bindings, so this only ever moves the table in view.
         if self.typing:
             return
+        if self._roll_page(delta):
+            return
         table = self.view.table
         table.action_cursor_down() if delta > 0 else table.action_cursor_up()
+
+    def _roll_page(self, delta: int) -> bool:
+        """Carry the cursor onto the next page when it runs off this one.
+
+        History is paged rather than scrolled — 1,594 rows should not all be
+        held in memory to look at twenty. But paging that stops the cursor dead
+        at the last row reads as "this is all there is", which is the wrong
+        thing to tell someone with sixty-three more pages. So the obvious motion
+        keeps working and the page turns underneath it.
+        """
+        if self.tab != HISTORY:
+            return False
+        page = self.history.page
+        table = self.view.table
+        row, rows = table.cursor_row, len(self.view.records)
+
+        if delta > 0 and row >= rows - 1 and page.number + 1 < page.pages:
+            self.action_page_forward()
+            self.view.table.move_cursor(row=0)
+            return True
+        if delta < 0 and row <= 0 and page.number > 0:
+            self.action_page_back()
+            # Onto the last row of the previous page, so going back and forward
+            # across a boundary lands where it started.
+            self.view.table.move_cursor(row=max(0, len(self.view.records) - 1))
+            return True
+        return False
 
     def action_focus_repos(self) -> None:
         """Hand the arrow keys to the sidebar, and take them back again."""
@@ -428,10 +517,30 @@ class Dashboard(App[None]):
     # ------------------------------------------------------- history tab
 
     def action_cycle_window(self) -> None:
+        """Hand the date range to the picker.
+
+        It used to cycle blindly through four ranges, so finding the one you
+        wanted meant pressing the key until it came round and reading a label
+        elsewhere to know where you had landed. The list is now on screen and
+        the key is how you reach it.
+        """
         if self.typing or self.tab != HISTORY:
             return
-        self.session = self.session.with_next_window()
+        picker = self.history.dates
+        picker.focus()
+        # Open it too: one key should get you to the choices, not to a control
+        # that then needs a second key to say what it offers.
+        picker.expanded = True
+
+    @on(Select.Changed, "#date_filter")
+    def _apply_window(self, event: Select.Changed) -> None:
+        if event.value is Select.BLANK or event.value == self.session.window:
+            return
+        self.session = self.session.with_window(int(event.value))
         self._reload_history(time.time())
+        # Back to the table: picking a range is a thing you finish, and leaving
+        # focus in the picker would leave every letter key inert.
+        self.view.table.focus()
 
     def action_author_filter(self) -> None:
         if self.tab != HISTORY:
@@ -474,7 +583,9 @@ class Dashboard(App[None]):
         if event.key != "escape":
             return
         sidebar = self.sidebar
-        if self.typing:
+        if self.picking:
+            self.view.table.focus()
+        elif self.typing:
             self._close_author_box()
         elif sidebar is not None and sidebar.has_focus:
             self.view.table.focus()

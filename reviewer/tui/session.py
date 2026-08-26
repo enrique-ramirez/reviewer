@@ -13,7 +13,8 @@ from .formatting import DAY
 
 ALL_REPOSITORIES = "All repositories"
 
-# Cycled with `t`. None first, so the default is "everything".
+# Offered by the date picker on History. None first, so the default is
+# "everything" and the list reads shortest-span-last.
 WINDOWS: tuple[tuple[str, float | None], ...] = (
     ("all time", None),
     ("last 7 days", 7 * DAY),
@@ -87,8 +88,11 @@ class Session:
     def with_author(self, author: str) -> "Session":
         return replace(self, author=author.strip(), page=0)
 
+    def with_window(self, window: int) -> "Session":
+        return replace(self, window=window % len(WINDOWS), page=0)
+
     def with_next_window(self) -> "Session":
-        return replace(self, window=(self.window + 1) % len(WINDOWS), page=0)
+        return self.with_window(self.window + 1)
 
     def with_page(self, page: int) -> "Session":
         return replace(self, page=max(0, page))

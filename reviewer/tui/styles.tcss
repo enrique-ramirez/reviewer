@@ -103,3 +103,19 @@ PacTimer {
 }
 /* Hidden rather than shrunk, so the space goes back to the table. */
 #log.hidden { display: none; }
+
+/* The History filter bar: a date picker that shows the current range, sitting
+   where the dim key hints used to be. One row, so it costs the table almost
+   nothing — page size follows the height that is left. */
+#history_filters {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+}
+#date_label {
+    color: $text-muted;
+    padding: 0 1 0 0;
+}
+#date_filter {
+    width: 16;
+}

@@ -12,6 +12,10 @@ from .models import Activity, Merge, PullRequest, ReviewCost, key_of
 from .session import Session
 
 PAGE_SIZE = 25
+"""Rows per page when the interface has not said how much room it has."""
+
+MIN_PAGE_SIZE = 5
+"""Below this a page is more turning than reading, so a tiny window pages less."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,20 +70,31 @@ def merges_this_run(store: Store, session: Session) -> MergePage:
     )
 
 
-def merge_history(store: Store, session: Session, now: float) -> MergePage:
-    """Everything on record, filtered and paged, with the page clamped in range."""
+def merge_history(
+    store: Store, session: Session, now: float, size: int = PAGE_SIZE
+) -> MergePage:
+    """Everything on record, filtered and paged, with the page clamped in range.
+
+    ``size`` is however many rows the table can actually show. A fixed page on a
+    tall terminal means half a screen of history and half a screen of nothing,
+    and on a short one it means rows that are fetched and then cut off.
+    """
+    size = max(MIN_PAGE_SIZE, size)
     scope = list(session.scope)
     after = session.merged_after(now)
     total = store.count_merged(scope, author=session.author, merged_after=after)
-    number = min(session.page, max(0, -(-total // PAGE_SIZE) - 1))
+    number = min(session.page, max(0, -(-total // size) - 1))
 
     rows = store.list_merged(
         scope,
         author=session.author,
         merged_after=after,
-        limit=PAGE_SIZE,
-        offset=number * PAGE_SIZE,
+        limit=size,
+        offset=number * size,
     )
     return MergePage(
-        merges=tuple(Merge.from_row(row) for row in rows), total=total, number=number
+        merges=tuple(Merge.from_row(row) for row in rows),
+        total=total,
+        number=number,
+        size=size,
     )

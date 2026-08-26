@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from reviewer import backfill
 from reviewer.tui import theme
 from reviewer.tui.data import MergePage
 from reviewer.tui.filling import BackfillStatus, in_flight_lines, progress_note
@@ -164,11 +165,46 @@ class Backfill(unittest.TestCase):
 
     def test_progress_names_what_it_has_and_how_to_stop(self) -> None:
         note = progress_note(
-            BackfillStatus(phase="running", filed=120, total=500), 0
+            BackfillStatus(phase="running", filed=120, scanned=300, total=500), 0
         )
         assert note is not None
-        self.assertIn("120", note.plain)
+        self.assertIn("300", note.plain)
+        self.assertIn("of about 500", note.plain)
+        self.assertIn("120 new", note.plain)
         self.assertIn("b to stop", note.plain)
+
+    def test_a_repository_already_on_record_still_shows_movement(self) -> None:
+        # The bug this replaced: progress counted rows *filed*, so re-running a
+        # backfill over history already on record sat at 0 for the whole sweep
+        # and was indistinguishable from a hang.
+        early = progress_note(
+            BackfillStatus(phase="running", filed=0, scanned=400, total=1594), 0
+        )
+        later = progress_note(
+            BackfillStatus(phase="running", filed=0, scanned=1200, total=1594), 0
+        )
+        assert early is not None and later is not None
+        self.assertIn("400", early.plain)
+        self.assertIn("1,200", later.plain)
+        self.assertNotEqual(early.plain, later.plain)
+        # Nothing new is not worth a "0 new" that reads as a failure.
+        self.assertNotIn("new", early.plain)
+
+    def test_what_it_says_when_it_finishes(self) -> None:
+        self.assertEqual(
+            backfill._outcome(120, 500), "120 added to the history"
+        )
+        # "0 added" is true and reads as failure. Say what was actually learnt.
+        self.assertIn("already up to date", backfill._outcome(0, 1594))
+        self.assertIn("1,594 checked", backfill._outcome(0, 1594))
+        self.assertEqual(backfill._outcome(0, 0), "nothing found to add")
+
+    def test_quitting_mid_sweep_admits_how_far_it_got(self) -> None:
+        lines = in_flight_lines(
+            BackfillStatus(phase="running", filed=0, scanned=700, total=1594)
+        )
+        self.assertIn("700", lines[0].plain)
+        self.assertIn("1,594", lines[0].plain)
 
 
 class Pacing(unittest.TestCase):
