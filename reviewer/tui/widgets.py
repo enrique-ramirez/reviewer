@@ -137,27 +137,47 @@ class Action:
 
 
 class ActionBar(Horizontal):
-    """The row of buttons under a detail pane: one left, one right.
+    """The buttons under a detail pane: things to do left, the way out right.
 
-    Two slots rather than a list, because there are only ever two kinds of thing
-    to offer — something to do with this record, and the way out to GitHub — and
-    a fixed pair keeps them from shuffling about as the cursor moves.
+    Fixed slots rather than a list built per record, so a button does not shift
+    sideways as the cursor moves down a table. Two on the left is enough for
+    everything offered so far — read what was said, and write what was not.
     """
+
+    #: Left-hand slots, in order. Anything past these is dropped rather than
+    #: silently overflowing the row.
+    SLOTS = ("primary", "second")
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        # Which action each slot is carrying. The button cannot hold it —
+        # ``Button.name`` is read-only — and its id names the slot rather than
+        # the action, which changes from row to row.
+        self._carrying: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
-        yield Button("", id="action-primary", compact=True, classes="action")
+        for slot in self.SLOTS:
+            yield Button("", id=f"action-{slot}", compact=True, classes="action")
         yield Button("", id="action-open", compact=True, classes="action")
 
-    def show(self, primary: Action | None, secondary: Action | None) -> None:
-        for slot, action in (("primary", primary), ("open", secondary)):
-            button = self.query_one(f"#action-{slot}", Button)
-            button.display = action is not None
-            if action is not None:
-                button.label = action.markup
-                button.tooltip = f"{action.label}  ({action.key})"
+    def carried_by(self, button: Button) -> str:
+        """The id of the action a button is offering right now."""
+        return self._carrying.get(button.id or "", "")
+
+    def show(self, left: Sequence[Action], right: Action | None) -> None:
+        padded: list[Action | None] = list(left[: len(self.SLOTS)])
+        padded += [None] * (len(self.SLOTS) - len(padded))
+        for slot, action in zip(self.SLOTS, padded):
+            self._fill(f"action-{slot}", action)
+        self._fill("action-open", right)
+
+    def _fill(self, button_id: str, action: Action | None) -> None:
+        button = self.query_one(f"#{button_id}", Button)
+        button.display = action is not None
+        self._carrying[button_id] = action.id if action else ""
+        if action is not None:
+            button.label = action.markup
+            button.tooltip = f"{action.label}  ({action.key})"
 
 
 class StatusBar(Static):

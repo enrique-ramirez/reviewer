@@ -16,7 +16,17 @@ from pathlib import Path
 from types import FrameType
 from typing import Any
 
-from . import backfill, identity, log, model, notify, state, summarize, worktree
+from . import (
+    backfill,
+    conversation,
+    identity,
+    log,
+    model,
+    notify,
+    state,
+    summarize,
+    worktree,
+)
 from .config import ConfigError, GlobalConfig, RepoConfig, load_env, load_repos
 from .gh import GraphQLClient, RestClient
 from .log import DebugSink
@@ -471,6 +481,14 @@ def _run_with_tui(
         repos=repos,
         dry_run=args.dry_run,
     )
+    # Reading a review conversation is a fifth thread, for the same reason as
+    # the others: it talks to GitHub, which must not happen on the event loop.
+    conversations = conversation.Runner(
+        open_store=lambda: state.Store(state_dir, db_name),
+        global_cfg=global_cfg,
+        repos=repos,
+        dry_run=args.dry_run,
+    )
     try:
         tui.run(
             tui.Runtime(
@@ -482,6 +500,7 @@ def _run_with_tui(
                 started_at=run_started,
                 backfiller=backfiller,
                 summariser=summariser,
+                conversations=conversations,
             )
         )
     finally:

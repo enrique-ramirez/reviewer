@@ -183,3 +183,27 @@ StatusBar {
 .actions #action-open {
     dock: right;
 }
+
+/* The review conversation: a near-full-screen reader, because the thing being
+   read is prose and threads rather than a question to answer. */
+#conversation {
+    width: 88%;
+    height: 88%;
+    background: $surface;
+    border: round $accent;
+}
+#conversation-title {
+    height: 1;
+    padding: 0 2;
+    background: $panel;
+}
+#conversation-body {
+    height: 1fr;
+    padding: 0 1;
+}
+#conversation-keys {
+    height: 1;
+    padding: 0 2;
+    color: $text-muted;
+    background: $panel;
+}

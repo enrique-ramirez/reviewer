@@ -16,6 +16,7 @@ from reviewer.tui.app import Dashboard
 from textual.widgets import TabbedContent
 
 from reviewer.tui.logs import LogRelay
+from reviewer.tui.screens import ConversationScreen
 from reviewer.tui.views.sidebar import RepoRow
 from reviewer.tui import theme
 from reviewer.tui.app import RunHeader
@@ -1209,3 +1210,89 @@ class Renamed(unittest.TestCase):
         root = Path(tempfile.mkdtemp())
         (root / state_mod.LEGACY_STATE_DIR_NAME).mkdir()
         self.assertIsNone(state_mod.adopt_legacy_state_dir(root / "somewhere-else"))
+
+
+class ReadingTheReview(unittest.IsolatedAsyncioTestCase):
+    """`c` opens what was actually said, without leaving the terminal."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        _seed(self.store, self.now)
+        self.runner = FakeConversations()
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self, runner: Any = "default") -> Dashboard:
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+                conversations=self.runner if runner == "default" else runner,
+            )
+        )
+
+    async def test_the_key_opens_it_for_the_row_under_the_cursor(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            record = app.view.current
+            await pilot.press("c")
+            await pilot.pause()
+            self.assertIsInstance(app.screen, ConversationScreen)
+            self.assertEqual(
+                self.runner.asked[0], (record.repo, record.number, False)
+            )
+
+    async def test_r_asks_github_again(self) -> None:
+        # A thread settled in the browser is only knowable by asking.
+        app = self._app()
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("c")
+            await pilot.pause()
+            await pilot.press("r")
+            await pilot.pause()
+            self.assertTrue(self.runner.asked[-1][2], "expected a refresh")
+
+    async def test_escape_closes_it(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("c")
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            self.assertNotIsInstance(app.screen, ConversationScreen)
+
+    async def test_without_a_runner_nothing_breaks(self) -> None:
+        app = self._app(runner=None)
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("c")
+            await pilot.pause()
+            self.assertNotIsInstance(app.screen, ConversationScreen)
+
+
+class FakeConversations:
+    def __init__(self) -> None:
+        self.asked: list[tuple[str, int, bool]] = []
+
+    def knows(self, repo: str) -> bool:
+        return True
+
+    def request(self, repo: str, number: int, refresh: bool = False) -> bool:
+        self.asked.append((repo, number, refresh))
+        return True
+
+    def result(self, repo: str, number: int):
+        from reviewer.conversation import Conversation
+
+        return Conversation(repo=repo, number=number, title="Ship it")

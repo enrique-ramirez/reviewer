@@ -23,7 +23,7 @@ from ..models import Merge
 from ..session import WINDOWS, Session
 from ..widgets import Cells, Column
 from ..widgets import Action
-from .base import OPEN_ON_GITHUB, RecordView
+from .base import OPEN_ON_GITHUB, READ_REVIEW, RecordView
 
 AUTHOR_WIDTH = 16
 REPO_WIDTH = 18
@@ -248,16 +248,23 @@ AUTHOR_FILTER_ID = "author_filter"
 WRITE_SUMMARY = Action(id="describe", label="Generate summary", key="g")
 
 
-def merge_actions(merge: Merge | None) -> tuple[Action | None, Action | None]:
-    """Buttons for a merged row: write the summary, and open it on GitHub.
+def merge_actions(
+    merge: Merge | None,
+) -> tuple[tuple[Action, ...], Action | None]:
+    """Buttons for a merged row: read it, write the summary, open it on GitHub.
 
     The write button only appears where there is nothing written yet, so the
-    pane never offers to spend a model call on something already paid for.
+    pane never offers to spend a model call on something already paid for. The
+    read button only appears where this tool actually said something.
     """
     if merge is None:
-        return (None, None)
-    primary = None if merge.described_by_model else WRITE_SUMMARY
-    return (primary, OPEN_ON_GITHUB if merge.url else None)
+        return ((), None)
+    left: list[Action] = []
+    if merge.reviewed_by_us:
+        left.append(READ_REVIEW)
+    if not merge.described_by_model:
+        left.append(WRITE_SUMMARY)
+    return (tuple(left), OPEN_ON_GITHUB if merge.url else None)
 DATE_FILTER_ID = "date_filter"
 
 #: The label beside the date picker, with its shortcut letter underlined — the

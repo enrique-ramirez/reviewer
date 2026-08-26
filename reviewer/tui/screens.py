@@ -12,10 +12,12 @@ from typing import Any, Mapping, Sequence
 
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Static
+from textual.widgets import MarkdownViewer, Static
 
-from .. import backfill
+from .. import backfill, conversation
 from . import prose, theme
 from .filling import BackfillStatus
 
@@ -141,3 +143,70 @@ def _work_in_flight(running: Sequence[Text], model_calls: int) -> Text:
             theme.MUTED,
         ),
     )
+
+
+class ConversationScreen(ModalScreen[None]):
+    """What was actually said on a pull request, rendered as markdown.
+
+    The one place a Textual widget earns its keep over a ``Text`` value: review
+    bodies are markdown written by people and by this tool — headings, fenced
+    code, the collapsible agent block — and rendering that by hand would be
+    reimplementing a renderer that already exists.
+
+    It opens straight away and fills in when the fetch lands, rather than
+    blocking the interface on a round trip to GitHub.
+    """
+
+    BINDINGS = [
+        Binding("escape,q,c", "dismiss", "Close"),
+        Binding("r", "refresh", "Refresh"),
+    ]
+
+    POLL_SECONDS = 0.2
+
+    def __init__(self, runner: Any, repo: str, number: int) -> None:
+        super().__init__()
+        self._runner = runner
+        self._repo = repo
+        self._number = number
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="conversation"):
+            yield Static(self._heading(), id="conversation-title")
+            yield MarkdownViewer(
+                "Reading it from GitHub…", show_table_of_contents=False,
+                id="conversation-body",
+            )
+            yield Static(
+                "esc close · r ask GitHub again", id="conversation-keys"
+            )
+
+    def _heading(self) -> Text:
+        return prose.join(
+            prose.span(f"{self._repo}#{self._number}", theme.KEY),
+            prose.span("   the review conversation", theme.MUTED),
+        )
+
+    def on_mount(self) -> None:
+        self._runner.request(self._repo, self._number)
+        self.set_interval(self.POLL_SECONDS, self._poll)
+        self._poll()
+
+    def _poll(self) -> None:
+        found = self._runner.result(self._repo, self._number)
+        if found is None:
+            return
+        body = self.query_one("#conversation-body", MarkdownViewer)
+        markup = conversation.render(found)
+        if getattr(self, "_shown", None) == markup:
+            return
+        self._shown = markup
+        self.run_worker(body.document.update(markup), exclusive=True)
+
+    def action_refresh(self) -> None:
+        """Ask again. A thread settled in the browser is only knowable by asking."""
+        self._shown = None
+        self.query_one("#conversation-body", MarkdownViewer).document.update(
+            "Reading it from GitHub…"
+        )
+        self._runner.request(self._repo, self._number, refresh=True)

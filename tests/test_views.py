@@ -4,6 +4,8 @@ import unittest
 
 from reviewer import backfill
 from reviewer.tui import prose, theme
+from reviewer.tui.views.base import READ_REVIEW
+from reviewer.tui.widgets import ActionBar
 from reviewer.tui.data import MergePage
 from reviewer.tui.filling import BackfillStatus, in_flight_lines, progress_note
 from reviewer.tui.models import Activity
@@ -301,24 +303,38 @@ class Panels(unittest.TestCase):
 
 class PanelActions(unittest.TestCase):
     def test_a_merge_without_a_summary_offers_to_write_one(self) -> None:
-        primary, secondary = merges.merge_actions(
+        left, right = merges.merge_actions(
             merge(description="", description_source="")
         )
-        self.assertEqual(primary, merges.WRITE_SUMMARY)
-        self.assertIsNotNone(secondary)
+        self.assertIn(merges.WRITE_SUMMARY, left)
+        self.assertIsNotNone(right)
 
     def test_one_that_has_a_summary_does_not(self) -> None:
-        primary, _ = merges.merge_actions(
+        left, _ = merges.merge_actions(
             merge(description="written", description_source="model")
         )
-        self.assertIsNone(primary, "never offer to buy the same sentence twice")
+        self.assertNotIn(
+            merges.WRITE_SUMMARY, left, "never offer to buy the same sentence twice"
+        )
+
+    def test_reading_it_is_offered_only_where_we_said_something(self) -> None:
+        reviewed, _ = merges.merge_actions(merge(our_comments=3, our_reviews=1))
+        self.assertIn(READ_REVIEW, reviewed)
+        untouched, _ = merges.merge_actions(merge(our_comments=0, our_reviews=0))
+        self.assertNotIn(READ_REVIEW, untouched)
 
     def test_nothing_selected_offers_nothing(self) -> None:
-        self.assertEqual(merges.merge_actions(None), (None, None))
+        self.assertEqual(merges.merge_actions(None), ((), None))
 
     def test_a_row_with_no_link_has_nowhere_to_open(self) -> None:
-        _, secondary = merges.merge_actions(merge(url=""))
-        self.assertIsNone(secondary)
+        _, right = merges.merge_actions(merge(url=""))
+        self.assertIsNone(right)
+
+    def test_only_as_many_buttons_as_there_are_slots(self) -> None:
+        left, _ = merges.merge_actions(
+            merge(our_comments=3, our_reviews=1, description="", description_source="")
+        )
+        self.assertLessEqual(len(left), len(ActionBar.SLOTS))
 
     def test_the_shortcut_letter_is_underlined(self) -> None:
         from reviewer.tui.widgets import Action

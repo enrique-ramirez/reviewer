@@ -10,7 +10,8 @@ from .. import formatting, prose, status, theme
 from ..models import PullRequest
 from ..session import Session
 from ..widgets import Cells, Column
-from .base import RecordView
+from ..widgets import Action
+from .base import OPEN_ON_GITHUB, READ_REVIEW, RecordView
 
 BOARD_COLUMNS = (
     Column("", 3),
@@ -295,6 +296,17 @@ def detail_text(
     )
 
 
+def board_actions(
+    pull_request: PullRequest | None,
+) -> tuple[tuple[Action, ...], Action | None]:
+    """Reading the review is offered wherever there is one to read."""
+    if pull_request is None:
+        return ((), None)
+    worth_reading = pull_request.reviewed_by_us or pull_request.open_threads
+    left = (READ_REVIEW,) if worth_reading else ()
+    return (left, OPEN_ON_GITHUB if pull_request.url else None)
+
+
 class BoardView(RecordView):
     COLUMNS = BOARD_COLUMNS
 
@@ -326,6 +338,11 @@ class BoardView(RecordView):
 
     def detail_text(self, record: PullRequest, *, width: int = 0) -> Text:
         return detail_text(record, self._now, self._frame, width=width)
+
+    def actions(
+        self, record: PullRequest | None
+    ) -> tuple[tuple[Action, ...], Action | None]:
+        return board_actions(record)
 
     def empty_text(self) -> Text:
         return prose.span("waiting for the first scan…", theme.MUTED)

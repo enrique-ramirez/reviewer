@@ -149,6 +149,7 @@ thing meant the one you could read was the one that was out of date.
 | `j` / `k` at a page edge | History | carries on to the next page |
 | `b` | History | fill in past history (press again to stop) |
 | `g` | History | write a summary for the selected merge — one model call |
+| `c` | any | read the review conversation without leaving the terminal |
 | `Escape` | History | clear the filters |
 | `e` | any | focus the repository sidebar (only with 2+ repos) |
 | `E` | any | fold the sidebar to a rail, and back |
@@ -158,6 +159,32 @@ flight rather than letting it finish. A review whose result nobody is left to
 post is worth nothing, so finishing it would buy the bill and no review. Nothing
 part-done is posted or recorded: the pull request is left exactly as it was, and
 the next run picks it up from the start.
+
+### Reading the review
+
+Press **`c`** on any pull request and the review conversation opens in the
+terminal: every comment thread with what was said, who said it, whether it was
+resolved, and a link back to it — followed by the submitted reviews. Ours are
+marked. `r` asks GitHub again, `Escape` closes it.
+
+It is **fetched, not stored**, and that is the whole design:
+
+- Everything already on record would show nothing under a scheme that only kept
+  what this tool wrote from today onward — including all of backfilled history.
+- A stored copy is a snapshot of what *we* posted. It cannot show the reply that
+  came after it.
+- **Resolution happens somewhere else.** A thread the author settled in the
+  browser is only knowable by asking, so asking is the design.
+
+Asking is cheap. The thread fetch is one GraphQL request that the reviewer
+already makes, and the reviews call is ETag-cached through the same database as
+everything else, so looking twice costs a `304`. Results are kept for the run,
+so flicking back to a pull request you already opened is instant.
+
+A busy repository can carry thirty reviews from three different bots. Every
+review of ours is shown; the rest are capped at the most recent few, and the
+screen says how many it left out — a cap nobody is told about reads as "that was
+all of it".
 
 ## More than one repository
 

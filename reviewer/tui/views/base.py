@@ -26,6 +26,7 @@ from ..widgets import (
 )
 
 OPEN_ON_GITHUB = Action(id="open", label="Open on GitHub", key="o")
+READ_REVIEW = Action(id="conversation", label="Read the review", key="c")
 
 
 class RecordView(Vertical):
@@ -110,8 +111,8 @@ class RecordView(Vertical):
             if record is None
             else self.detail_text(record, width=width)
         )
-        primary, secondary = self.actions(record)
-        self.action_bar.show(primary, secondary)
+        left, right = self.actions(record)
+        self.action_bar.show(left, right)
 
     def redraw_status(self) -> None:
         self.status_bar.update(self.status_text())
@@ -130,15 +131,17 @@ class RecordView(Vertical):
     def detail_text(self, record: Any, *, width: int = 0) -> Text:
         raise NotImplementedError
 
-    def actions(self, record: Any) -> tuple[Action | None, Action | None]:
-        """The two buttons under the pane: something to do, and the way out.
+    def actions(
+        self, record: Any
+    ) -> tuple[tuple[Action, ...], Action | None]:
+        """The buttons under the pane: things to do, and the way out.
 
-        A record with no URL offers neither — an empty pane should not carry a
-        button that cannot work.
+        A record with no URL offers no way out — an empty pane should not carry
+        a button that cannot work.
         """
         if record is None or not getattr(record, "url", ""):
-            return (None, None)
-        return (None, OPEN_ON_GITHUB)
+            return ((), None)
+        return ((), OPEN_ON_GITHUB)
 
     def empty_text(self) -> Text:
         raise NotImplementedError

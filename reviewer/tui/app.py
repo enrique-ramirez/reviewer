@@ -39,7 +39,7 @@ from textual.widgets import (
     TabPane,
 )
 
-from .. import backfill, model, summarize
+from .. import backfill, conversation, model, summarize
 from ..state import Store
 from . import browser, data, filling, screens, theme
 from .logs import LogRelay
@@ -141,6 +141,7 @@ class Runtime:
     started_at: float
     backfiller: backfill.Runner | None = None
     summariser: summarize.Runner | None = None
+    conversations: conversation.Runner | None = None
 
 
 class Dashboard(App[None]):
@@ -164,6 +165,7 @@ class Dashboard(App[None]):
         Binding("E", "toggle_repos", "Fold repos"),
         Binding("b", "backfill", "Fill history"),
         Binding("g", "describe", "Summarise"),
+        Binding("c", "conversation", "Read the review"),
         Binding("l", "toggle_log", "Log"),
         Binding("r", "reload", "Refresh"),
         # Shown, not hidden: the footer is the only place the keys are listed
@@ -507,10 +509,14 @@ class Dashboard(App[None]):
         drift apart.
         """
         event.stop()
-        if event.button.id == "action-open":
-            self.action_open()
-        elif event.button.id == "action-primary":
-            self.action_describe()
+        actions = {
+            "open": self.action_open,
+            "describe": self.action_describe,
+            "conversation": self.action_conversation,
+        }
+        run = actions.get(self.view.action_bar.carried_by(event.button))
+        if run is not None:
+            run()
         # Clicking a button takes focus with it, which would leave every letter
         # key inert until the reader worked out why.
         self.view.table.focus()
@@ -745,6 +751,26 @@ class Dashboard(App[None]):
             self.history.table.invalidate()
 
     # --------------------------------------------------------- summarising
+
+    def action_conversation(self) -> None:
+        """Open what was actually said about the row under the cursor.
+
+        Asked for rather than kept: everything already on record would show
+        nothing under a scheme that only stored what it wrote from now on, and
+        a thread the author resolved in the browser is only knowable by asking.
+        """
+        runner = self.runtime.conversations
+        record = self.view.current
+        if self.typing or self.asking or record is None:
+            return
+        if runner is None:
+            self.notify("reading reviews needs the watch loop running", timeout=4)
+            return
+        if not runner.knows(record.repo):
+            return
+        self.push_screen(
+            screens.ConversationScreen(runner, record.repo, record.number)
+        )
 
     def action_describe(self) -> None:
         """Write a summary for the merge under the cursor.
