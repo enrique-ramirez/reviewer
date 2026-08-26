@@ -17,6 +17,8 @@ from textual.widgets import TabbedContent
 
 from reviewer.tui.logs import LogRelay
 from reviewer.tui.views.sidebar import RepoRow
+from reviewer.tui import theme
+from reviewer.tui.app import RunHeader
 from reviewer.tui.widgets import PacTimer
 from reviewer.tui.views import board
 from reviewer.tui.views.board import BoardView
@@ -825,6 +827,35 @@ class Layout(unittest.IsolatedAsyncioTestCase):
                         clock = app.query_one("HeaderClock").region
                         self.assertLessEqual(pac.right, clock.x)
 
+    async def test_the_header_stays_aligned_when_it_is_clicked_taller(self) -> None:
+        """Clicking the header makes it three rows.
+
+        The icon and the clock are docked and fill that height, centring
+        themselves in it. The title and the countdown are not, so they stayed a
+        single row pinned to the top while everything around them moved down.
+        """
+        app = self._app()
+        async with app.run_test(size=(150, 30)) as pilot:
+            await pilot.pause()
+            header = app.query_one(RunHeader)
+            for tall in (False, True, False):
+                with self.subTest(tall=tall):
+                    header.tall = tall
+                    await pilot.pause()
+                    await pilot.pause()
+                    spans = {
+                        name: (r.y, r.y + r.height)
+                        for name, r in (
+                            (n, app.query_one(n).region)
+                            for n in ("HeaderIcon", "HeaderTitle", "HeaderClock")
+                        )
+                    }
+                    pac = app.query_one(PacTimer).region
+                    spans["PacTimer"] = (pac.y, pac.y + pac.height)
+                    self.assertEqual(
+                        len(set(spans.values())), 1, f"not all on the same rows: {spans}"
+                    )
+
     async def test_the_status_line_belongs_to_the_list_not_the_screen(self) -> None:
         app = self._app()
         async with app.run_test(size=(140, 30)) as pilot:
@@ -1084,6 +1115,25 @@ class Naming(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=(140, 30)) as pilot:
             await pilot.pause()
             self.assertEqual(app.title, "ᗣ Blinky: All repositories")
+
+    async def test_the_ghost_wears_the_red_it_wears_in_the_countdown(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            text = app.query_one(RunHeader).format_title()
+            self.assertTrue(text.plain.startswith(theme.GHOST))
+            ghost = next(s for s in text.spans if s.start == 0)
+            self.assertEqual(str(ghost.style), theme.URGENT)
+            self.assertEqual(ghost.end, len(theme.GHOST), "only the ghost is red")
+
+    async def test_the_title_itself_stays_a_plain_string(self) -> None:
+        # The terminal's own tab title reads app.title; markup would show up
+        # there literally.
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            self.assertNotIn("[", app.title)
+            self.assertEqual(app.title, f"{theme.GHOST} Blinky: All repositories")
 
     async def test_it_follows_the_sidebar(self) -> None:
         app = self._app()

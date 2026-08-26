@@ -191,6 +191,10 @@ class PacTimer(Static):
     PacTimer {
         dock: right;
         width: auto;
+        /* Full height so it centres itself when the header is clicked taller,
+           the way the icon and the clock do. Left at one row it stayed pinned
+           to the top while everything around it moved to the middle. */
+        height: 100%;
         /* The clock's ten columns, plus a rule and a column of air either
            side of it: the two were legible on their own and read as one
            string together. */

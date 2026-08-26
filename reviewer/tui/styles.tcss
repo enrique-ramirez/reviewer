@@ -126,10 +126,9 @@ StatusBar {
 }
 #author_filter.active { display: block; }
 
-PacTimer {
-    height: 1;
-    background: $panel;
-}
+/* PacTimer styles itself, in widgets.py, because it lives in the header now
+   and has to match whatever height the header is. A rule here would win over
+   that and pin it back to one row. */
 
 #log {
     height: 10;

@@ -58,7 +58,41 @@ class RunHeader(Header):
 
     Composed after the clock on purpose: two widgets docked right stack inward
     from the edge, so the clock keeps the corner and this sits to its left.
+
+    Clicking the header makes it three rows tall. The icon and the clock fill
+    that height and centre themselves in it; the title and the countdown were
+    one row each and stayed pinned to the top, so a taller header left them
+    sitting above everything else. Both are given the height to centre in.
     """
+
+    DEFAULT_CSS = """
+    RunHeader HeaderTitle {
+        height: 100%;
+        content-align: center middle;
+    }
+    """
+
+    def format_title(self) -> Text:
+        """The title, with the ghost in Blinky's own red.
+
+        The same red the ghost at the end of the countdown wears, so the two are
+        recognisably the same character.
+
+        Presentation only: ``app.title`` stays a plain string, so anything that
+        reads it — the terminal's own tab, a test — gets the name rather than
+        markup.
+        """
+        title = self.screen_title
+        text = Text(no_wrap=True, overflow="ellipsis")
+        if title.startswith(theme.GHOST):
+            text.append(theme.GHOST, style=theme.URGENT)
+            title = title[len(theme.GHOST) :]
+        text.append(title)
+        sub_title = self.screen_sub_title
+        if sub_title:
+            text.append(" — ")
+            text.append(sub_title, style=theme.MUTED)
+        return text
 
     def __init__(self, timer: PacTimer) -> None:
         super().__init__(show_clock=True)
