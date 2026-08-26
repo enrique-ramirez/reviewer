@@ -1,0 +1,8 @@
+# Optional — only needed for `./run.sh --tui`.
+#
+# The reviewer itself (./run.sh, --once, --check, --dry-run) is standard library
+# only and runs on a machine that has never used pip. This file exists so the
+# dashboard is reproducible, not because the tool needs it.
+#
+#   python3 -m pip install -r requirements-tui.txt
+textual>=8.0,<9

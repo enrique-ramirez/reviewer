@@ -1,0 +1,79 @@
+"""The only place the dashboard talks to the store.
+
+Rows go in, immutable models come out; every view above this reads models.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from ..state import Store
+from .models import Activity, Merge, PullRequest, key_of
+from .session import Session
+
+PAGE_SIZE = 25
+
+
+@dataclass(frozen=True, slots=True)
+class MergePage:
+    """One page of merged pull requests, and how many there were in total."""
+
+    merges: tuple[Merge, ...]
+    total: int
+    number: int = 0
+    size: int = PAGE_SIZE
+
+    @property
+    def pages(self) -> int:
+        return max(1, -(-self.total // self.size))
+
+
+def open_pull_requests(store: Store, repos: tuple[str, ...]) -> tuple[PullRequest, ...]:
+    """Every open pull request across every watched repository, unscoped.
+
+    Unscoped on purpose: the sidebar counts what is waiting in the repositories
+    you are *not* looking at, which is most of the reason to have one.
+    """
+    in_flight = store.active_reviews(list(repos))
+    reviewed = store.reviewed_pull_requests(list(repos))
+    return tuple(
+        PullRequest.from_row(
+            row,
+            activity=Activity.from_row(in_flight.get(key_of(row))),
+            reviewed=key_of(row) in reviewed,
+        )
+        for row in store.list_pr_view(list(repos))
+    )
+
+
+def merges_this_run(store: Store, session: Session) -> MergePage:
+    """What landed since the run started, unfiltered and unpaged."""
+    scope = list(session.scope)
+    return MergePage(
+        merges=tuple(
+            Merge.from_row(row)
+            for row in store.list_merged(
+                scope, since=session.started_at, live_only=True, limit=PAGE_SIZE
+            )
+        ),
+        total=store.count_merged(scope, since=session.started_at, live_only=True),
+    )
+
+
+def merge_history(store: Store, session: Session, now: float) -> MergePage:
+    """Everything on record, filtered and paged, with the page clamped in range."""
+    scope = list(session.scope)
+    after = session.merged_after(now)
+    total = store.count_merged(scope, author=session.author, merged_after=after)
+    number = min(session.page, max(0, -(-total // PAGE_SIZE) - 1))
+
+    rows = store.list_merged(
+        scope,
+        author=session.author,
+        merged_after=after,
+        limit=PAGE_SIZE,
+        offset=number * PAGE_SIZE,
+    )
+    return MergePage(
+        merges=tuple(Merge.from_row(row) for row in rows), total=total, number=number
+    )

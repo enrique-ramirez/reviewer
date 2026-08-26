@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+config/*.env
+
+# Real repo configs. Only the samples in config/repos.sample/ are tracked.
+config/repos/
+config/global.json
+
+# Runtime artifacts live in ~/.local/state/pr-reviewer/, but guard anyway
+# in case someone points --state-dir at the checkout.
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+logs/
+debug/
+.state/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# OS
+.DS_Store
+
+# Local Claude Code settings for this checkout (machine-specific)
+.claude/settings.local.json

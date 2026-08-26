@@ -1,0 +1,221 @@
+{
+  "$comment": [
+    "Copy this file into config/repos/ (gitignored), rename it, and edit.",
+    "Filename convention: <owner>__<repo>.json — it is only a filename, the",
+    "'repo' key below is what actually identifies the repository.",
+    "Repos are processed in filename order, so prefix with 10-, 20- etc. if you",
+    "want to control which one gets first call on your quota."
+  ],
+
+  "enabled": true,
+  "repo": "example-org/example-repo",
+
+  "local_path": "~/Projects/example-org/example-repo",
+  "$comment_local_path": [
+    "Your everyday clone. The reviewer never checks out a branch in it and",
+    "never touches refs/heads/* or refs/remotes/*. It fetches PR heads into",
+    "refs/reviewer/* and creates a detached worktree in your temp dir, which it",
+    "removes when the review finishes. Set to null to skip the worktree",
+    "entirely — reviews then run on the diff alone, with no ability to read",
+    "surrounding code for conventions."
+  ],
+
+  "identity": null,
+  "$comment_identity": [
+    "The GitHub account the token belongs to — used to recognise our own PRs,",
+    "our own review threads, and re-review requests aimed at us.",
+    "null means: ask the token who it is, which is right almost always. Set it",
+    "to a username only if you want the check; a value that disagrees with the",
+    "token is an error rather than something the reviewer works around."
+  ],
+
+  "language": "en",
+  "$comment_language": [
+    "Language for everything a person reads: inline comments, the summary, and",
+    "replies. BCP-47 tag or plain name — 'es', 'de', 'pt-BR', 'Spanish'.",
+    "Falls back to global.default_language when omitted."
+  ],
+  "agent_language": null,
+  "$comment_agent_language": "Language for the copy-paste agent block. null means: same as 'language'.",
+
+  "gates": {
+    "$comment": "A PR is reviewed when every enabled gate passes. Set any to false to switch it off for this repo.",
+
+    "skip_drafts": true,
+    "skip_own_prs": true,
+    "skip_if_approved_by_others": true,
+    "$comment_skip_if_approved": "An explicit re-review request aimed at you overrides this — you asked for it, you get it.",
+
+    "require_ci_green": true,
+    "ignore_checks": [],
+    "$comment_ignore_checks": [
+      "Exact check-run names to disregard when deciding CI is green. Use for",
+      "optional or flaky checks that are not required to merge. The 'approving",
+      "review required' rule is a branch-protection setting, not a check run, so",
+      "it never appears here and never blocks the reviewer."
+    ],
+    "treat_neutral_as_pass": true,
+    "treat_skipped_as_pass": true,
+
+    "blocking_labels": ["ci:hold"],
+    "$comment_blocking_labels": "Any of these present on the PR and it is left alone. Empty list disables.",
+    "required_labels": [],
+    "$comment_required_labels": "If non-empty, the PR needs at least one of these before it is reviewed.",
+
+    "only_if_review_requested": false,
+    "$comment_only_if_review_requested": "true = review only PRs where you are a requested reviewer. false = review every PR that passes the other gates.",
+
+    "base_branches": [],
+    "$comment_base_branches": "Restrict to PRs targeting these branches, e.g. ['main', 'develop']. Empty = any base."
+  },
+
+  "diff": {
+    "$comment": [
+      "Three tiers, applied in this order. Everything dropped or shortened is",
+      "listed by name in the summary comment, so a reviewed PR always says what",
+      "was not read."
+    ],
+
+    "exclude": [
+      "**/*.lock",
+      "pnpm-lock.yaml",
+      "package-lock.json",
+      "yarn.lock",
+      "**/__snapshots__/**",
+      "**/*.snap",
+      "**/dist/**",
+      "**/build/**",
+      "**/*.min.js",
+      "**/*.min.css",
+      "**/generated/**",
+      "**/*.generated.*",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.gif",
+      "**/*.webp",
+      "**/*.svg",
+      "**/*.pdf",
+      "**/*.ico",
+      "**/*.woff",
+      "**/*.woff2"
+    ],
+    "$comment_exclude": "Dropped from the diff entirely. The reviewer is told the file changed and by how many lines, and nothing else.",
+
+    "summarize_only": [
+      "**/migrations/**",
+      "**/*.sql"
+    ],
+    "$comment_summarize_only": [
+      "For files that occasionally matter but are usually artifacts — a",
+      "migration snapshot that adds 9,000 lines and says nothing. The reviewer",
+      "gets the path, the line counts, and the hunk headers, so it can still",
+      "say 'this migration changed, worth a human glance' without reading it."
+    ],
+
+    "max_file_lines": 400,
+    "$comment_max_file_lines": "A single file's patch longer than this is sent head-and-tail with an elision marker in the middle.",
+
+    "max_total_lines": 3000,
+    "$comment_max_total_lines": [
+      "Measured AFTER exclude and summarize_only are applied, so a PR that is",
+      "+10,000 lines of snapshot and +900 lines of real code counts as 900.",
+      "Over the limit, files are dropped lowest-risk first and the summary names",
+      "every file that went unreviewed."
+    ],
+
+    "context_lines": 3,
+    "$comment_context_lines": "Unchanged lines kept around each hunk. Lowering to 1 or 2 cuts tokens noticeably on large diffs at some cost to readability."
+  },
+
+  "review": {
+    "axes": ["standards", "spec"],
+    "$comment_axes": [
+      "'standards' — does this match the conventions in personality/ and the",
+      "repo's own documented standards? 'spec' — does it actually deliver what",
+      "the linked issue asked for? Kept separate so a clean-code pass cannot",
+      "mask a PR that builds the wrong thing. Drop 'spec' in repos where PRs",
+      "are not tied to tickets."
+    ],
+    "split_axes_into_separate_calls": false,
+    "$comment_split": "false = one call, two labelled sections (cheaper). true = one call per axis (~2x quota, stronger separation).",
+
+    "personality": [
+      "00-core",
+      "05-severity",
+      "06-voice-human",
+      "07-voice-agent",
+      "40-conventions"
+    ],
+    "$comment_personality": [
+      "Files from personality/, in order, concatenated into the system prompt.",
+      "90-output-contract is always appended last.",
+      "These five are the general reviewer and apply to any codebase. The rest",
+      "are opt-in specialisms — add the ones this repo needs:",
+      "  '10-frontend'      browser correctness: state, effects, rendering",
+      "  '20-accessibility' keyboard, screen readers, contrast",
+      "  '30-shareability'  when something belongs in a shared package",
+      "Write your own alongside them — any personality/<name>.md can be listed",
+      "here, and a file per specialism keeps each repo's prompt to what applies."
+    ],
+
+    "$comment_repo_notes": [
+      "Conventions specific to this repository go in a markdown file sitting next",
+      "to this one — same name, .md instead of .json. It is picked up",
+      "automatically; there is no key for it.",
+      "Prefer writing conventions in the repository itself (CLAUDE.md and friends,",
+      "read below) so they stay current for everyone. Use the notes file for what",
+      "belongs to the reviewer rather than the team."
+    ],
+
+    "repo_context": {
+      "enabled": true,
+      "from_ref": "default_branch",
+      "$comment_from_ref": [
+        "Where to read the target repo's own CLAUDE.md / .claude/*.md from.",
+        "'default_branch' reads code that has already been reviewed. Reading it",
+        "from the PR branch would let a PR ship instructions to its own",
+        "reviewer, which matters because this tool can approve.",
+        "A PR that modifies these files is surfaced as a finding."
+      ],
+      "paths": ["CLAUDE.md", ".claude/*.md"],
+      "$comment_paths": ".claude/skills/** is left out on purpose — those are workflow skills for building in the repo, not for reviewing it.",
+      "max_chars": 20000
+    },
+
+    "max_disagreement_rounds_per_thread": 3,
+    "$comment_disagreement": [
+      "Counted per thread, not per PR. Review rounds themselves are uncapped —",
+      "a PR can go fifteen rounds. What is capped is one thread ping-ponging.",
+      "At the cap that single thread goes quiet and you get a notification;",
+      "every other thread and every later round carries on."
+    ]
+  },
+
+  "approval": {
+    "mode": "auto",
+    "$comment_mode": "'auto' — submit reviews without asking. 'manual' — post nothing, just notify you with the drafted review saved to the state dir.",
+
+    "no_blocker_action": "comment_and_invite",
+    "$comment_no_blocker_action": [
+      "What to submit when there are findings but no blockers.",
+      "'comment_and_invite' — post the findings as COMMENT plus one line in the",
+      "  summary offering to approve as-is if the author says they would rather",
+      "  not take the nits. When they reply, the claim is checked the same way a",
+      "  disputed thread is, and an APPROVE follows.",
+      "'approve_with_notes' — approve immediately, nits attached as comments.",
+      "'comment_only' — post findings, say nothing about approving."
+    ],
+
+    "manual_only_when": {
+      "$comment": "Conditions that force a human approval even in auto mode. Empty/null values disable a condition.",
+      "changed_lines_over": null,
+      "touches_paths": [],
+      "$comment_touches_paths": "e.g. ['**/auth/**', '**/billing/**', '**/*.sql'] to keep sensitive areas hand-approved.",
+      "pr_has_labels": []
+    }
+  },
+
+  "notify_on": ["manual_approval_needed", "disagreement_cap_reached", "error"],
+  "$comment_notify_on": "Also available: 'blocker_found', 'approved', 'review_posted'."
+}

@@ -1,0 +1,49 @@
+{
+  "$comment": "Copy to config/global.json (gitignored) and edit. Every key here is optional; these are the defaults.",
+
+  "tick_seconds": 900,
+  "default_language": "en",
+
+  "max_reviews_per_tick": 6,
+  "$comment_max_reviews": "Quota is shared across all repos. Repos are walked in the order they load (alphabetical by filename), so name them to encode priority.",
+
+  "claude": {
+    "command": "claude",
+    "model": null,
+    "$comment_model": "null uses whatever your CLI defaults to. Set e.g. 'claude-opus-5' or 'claude-sonnet-5' to pin one.",
+
+    "extra_args": [],
+    "$comment_extra_args": "Appended verbatim to every invocation. Claude Code's CLI flags change between versions — run `claude --help` and put anything version-specific here rather than editing Python.",
+
+    "allowed_tools": ["Read", "Glob", "Grep"],
+    "$comment_allowed_tools": "Read-only tools so the reviewer can check surrounding code for conventions. Adding Bash, Write, or Edit would give a PR under review the ability to act on this machine.",
+
+    "timeout_seconds": 900
+  },
+
+  "merge_summary": {
+    "enabled": true,
+    "$comment": "The one-line 'what changed' on the Summary tab. Written once per merged pull request and kept, so this is the cheapest call the tool makes: a few hundred lines of metadata, no tools, no checkout. Set false to keep the merge record but leave the descriptions blank.",
+
+    "model": null,
+    "$comment_model": "null reuses claude.model. Worth pointing at a smaller model than the reviewer uses — this is a summarising job, not a judging one.",
+
+    "timeout_seconds": 180,
+    "max_per_tick": 5,
+    "$comment_max_per_tick": "Cap on retries per repository per tick, for merges whose first summary call failed. New merges are always summarised as they are found.",
+
+    "max_tries": 3,
+    "$comment_max_tries": "After this many failed attempts the description falls back to our own review summary, so a missing CLI cannot buy a failed subprocess every tick forever."
+  },
+
+  "notifications": {
+    "enabled": true,
+    "command": "osascript",
+    "$comment": "macOS only. Set enabled=false to silence, or swap in terminal-notifier / a shell script that takes --title and --message."
+  },
+
+  "logging": {
+    "level": "INFO",
+    "$comment": "Logs record repo, PR number, decision, and token counts. Prompt and diff bodies are written only when you pass --debug, and then only to the state dir."
+  }
+}
