@@ -1,7 +1,8 @@
-"""The backfill, as the interface sees it.
+"""Background work, as the interface sees it.
 
-The work runs on its own thread and reports through a dict; this turns that dict
-into a value and into the two lines the interface renders from it.
+Two jobs run on threads of their own and report through a dict: filling in
+history, and writing a summary for a merge nobody watched land. This turns those
+dicts into values, and into the lines the interface renders from them.
 """
 
 from __future__ import annotations
@@ -87,5 +88,66 @@ def in_flight_lines(status: BackfillStatus) -> tuple[Text, ...]:
         prose.join(
             prose.span("  filling history", theme.LIVE),
             prose.span(counted, theme.MUTED),
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryStatus:
+    """Summaries being written on request, one merge at a time."""
+
+    phase: str = "idle"
+    current: str = ""
+    pending: int = 0
+    written: int = 0
+    failed: int = 0
+    message: str = ""
+
+    @property
+    def working(self) -> bool:
+        return self.phase == "running"
+
+    @property
+    def finished(self) -> bool:
+        return self.phase in FINISHED
+
+    @property
+    def failed_outright(self) -> bool:
+        return self.phase == "error"
+
+    @classmethod
+    def from_status(cls, status: Mapping[str, Any]) -> "SummaryStatus":
+        return cls(
+            phase=str(status.get("phase") or "idle"),
+            current=str(status.get("current") or ""),
+            pending=int(status.get("pending") or 0),
+            written=int(status.get("written") or 0),
+            failed=int(status.get("failed") or 0),
+            message=str(status.get("message") or ""),
+        )
+
+
+def summary_note(status: SummaryStatus, frame: int) -> Text | None:
+    """A line for the History status bar while a summary is being written."""
+    if not status.working or not status.current:
+        return None
+    queued = f" · {status.pending} queued" if status.pending else ""
+    return prose.join(
+        prose.span(
+            f"  {theme.spinner_frame(frame)} summarising {status.current}", theme.LIVE
+        ),
+        prose.span(queued, theme.MUTED) if queued else None,
+    )
+
+
+def summary_in_flight(status: SummaryStatus) -> tuple[Text, ...]:
+    """What to admit to when the user asks to quit."""
+    if not status.working or not status.current:
+        return ()
+    queued = f"   {status.pending} more queued" if status.pending else ""
+    return (
+        prose.join(
+            prose.span(f"  summarising {status.current}", theme.LIVE),
+            prose.span(queued, theme.MUTED) if queued else None,
         ),
     )

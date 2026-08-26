@@ -28,7 +28,7 @@ REPO_WIDTH = 18
 
 DESCRIPTION_NOTES = {
     "title": "the author's own title — backfilled history is not summarised, "
-    "which is what keeps it free",
+    "which is what keeps it free. press g to write one for this pull request",
     "review": "taken from our own review — the summary could not be written",
 }
 
@@ -57,13 +57,36 @@ def _contribution(merge: Merge) -> Text:
     return prose.join(
         prose.field("from us", detail),
         prose.field("ended on", merge.last_event) if merge.last_event else None,
+        _cost(merge),
     )
+
+
+def _cost(merge: Merge) -> Text | None:
+    """What reviewing it cost, totalled over every round.
+
+    Every part is conditional: providers report different things, and a zero
+    printed where one simply said nothing would read as a measurement.
+    """
+    cost = merge.cost
+    if cost is None:
+        return None
+    parts: list[str] = []
+    if cost.seconds:
+        parts.append(formatting.elapsed(cost.seconds))
+    if cost.tokens:
+        parts.append(f"{formatting.tokens(cost.tokens)} tokens")
+    if cost.cost_usd:
+        parts.append(formatting.money(cost.cost_usd))
+    if not parts:
+        return None
+    return prose.field("cost", " · ".join(parts) + (f"   {cost.label}" if cost.label else ""))
 
 
 def _summary_paragraph(merge: Merge) -> Text:
     if not merge.description:
         return prose.join(
-            prose.line("Summary not written yet.", theme.MUTED), prose.blank()
+            prose.line("Summary not written yet. Press g to write one.", theme.MUTED),
+            prose.blank(),
         )
     note = DESCRIPTION_NOTES.get(merge.description_source)
     return prose.join(

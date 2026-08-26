@@ -16,7 +16,7 @@ from pathlib import Path
 from types import FrameType
 from typing import Any
 
-from . import backfill, identity, log, model, notify, state, worktree
+from . import backfill, identity, log, model, notify, state, summarize, worktree
 from .config import ConfigError, GlobalConfig, RepoConfig, load_env, load_repos
 from .gh import GraphQLClient, RestClient
 from .log import DebugSink
@@ -463,6 +463,14 @@ def _run_with_tui(
         graphql=GraphQLClient(global_cfg.token, global_cfg.graphql_url),
         repos=repos,
     )
+    # And summarising a backfilled merge runs on a fourth, for the same
+    # reasons: it makes a model call, which is the slowest thing in the tool.
+    summariser = summarize.Runner(
+        open_store=lambda: state.Store(state_dir, db_name),
+        global_cfg=global_cfg,
+        repos=repos,
+        dry_run=dry_run,
+    )
     try:
         tui.run(
             tui.Runtime(
@@ -473,11 +481,13 @@ def _run_with_tui(
                 status=lambda: dict(status),
                 started_at=run_started,
                 backfiller=backfiller,
+                summariser=summariser,
             )
         )
     finally:
         stop.set()
         backfiller.cancel()
+        summariser.cancel()
         # Before the join, not after: the reviewer thread is most likely sitting
         # inside a model call that will not return for minutes, and the join
         # would time out and leave the child running as an orphan. Killing it

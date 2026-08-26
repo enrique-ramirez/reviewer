@@ -106,6 +106,26 @@ def churn(additions: int, deletions: int) -> str:
     return f"+{additions} −{deletions}"
 
 
+def tokens(count: int) -> str:
+    """A token count at a glance. 1_575_476 -> '1.6M'.
+
+    Exact figures belong in the log and in ``--dry-run``; what a detail pane is
+    for is noticing that one review cost ten times what its neighbours did.
+    """
+    if count >= 1_000_000:
+        return f"{count / 1_000_000:.1f}M"
+    if count >= 1_000:
+        return f"{count / 1_000:.1f}k".replace(".0k", "k")
+    return str(count)
+
+
+def money(usd: float) -> str:
+    """A cost small enough that two decimal places would round it away."""
+    if usd >= 1:
+        return f"${usd:.2f}"
+    return f"${usd:.3f}".rstrip("0").rstrip(".")
+
+
 def clip(value: str, width: int) -> str:
     return value[:width]
 

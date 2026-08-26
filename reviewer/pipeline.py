@@ -298,6 +298,16 @@ class Reviewer:
                 "our_comments": tally["comments"],
                 "our_blockers": tally["blockers"],
                 "last_event": tally["last_event"],
+                "review_seconds": tally["duration_seconds"] or None,
+                "review_input_tokens": tally["input_tokens"] or None,
+                "review_output_tokens": tally["output_tokens"] or None,
+                "review_cached_tokens": tally["cached_tokens"] or None,
+                "review_cost_usd": tally["cost_usd"] or None,
+                "review_model": (
+                    f"{tally['provider']} · {tally['model']}"
+                    if tally["provider"] and tally["model"]
+                    else tally["provider"] or tally["model"] or None
+                ),
             }
         )
         if not filed:
@@ -847,6 +857,7 @@ class Reviewer:
         self.debug.write(cfg.repo, number, "user-prompt.md", user)
 
         payloads: list[dict[str, Any]] = []
+        spend = model.Spend()
         if cfg.review.get("split_axes_into_separate_calls") and len(axes) > 1:
             for axis in axes:
                 single = prompt.build_review_user_prompt(
@@ -861,10 +872,12 @@ class Reviewer:
                     axes=[axis],
                 )
                 payloads.append(
-                    self._call_model(system, single, checkout_path, number, axis)
+                    self._call_model(system, single, checkout_path, number, axis, spend)
                 )
         else:
-            payloads.append(self._call_model(system, user, checkout_path, number, "all"))
+            payloads.append(
+                self._call_model(system, user, checkout_path, number, "all", spend)
+            )
 
         findings: list[render.Finding] = []
         summaries: list[str] = []
@@ -885,6 +898,7 @@ class Reviewer:
             bundle=bundle,
             findings=findings,
             summary_text=summary_text,
+            spend=spend,
         )
 
     def _call_model(
@@ -894,6 +908,7 @@ class Reviewer:
         checkout_path: Path | None,
         number: int,
         tag: str,
+        spend: model.Spend | None = None,
     ) -> dict[str, Any] | None:
         try:
             result = model.run(
@@ -911,6 +926,8 @@ class Reviewer:
                     "%s#%s: model call failed: %s", self.cfg.repo, number, exc
                 )
             return None
+        if spend is not None:
+            spend.add(result)
         self.debug.write(self.cfg.repo, number, f"response-{tag}.json", result.payload)
         log.get().info(
             "%s#%s: %s",
@@ -944,6 +961,7 @@ class Reviewer:
         blockers: int,
         placed: Any,
         summary_text: str,
+        spend: model.Spend | None = None,
     ) -> None:
         """Append what this round did, for the merge record to total up later.
 
@@ -961,6 +979,7 @@ class Reviewer:
             blockers=blockers,
             inline=len(placed.inline),
             summary=summary_text,
+            spend=spend if spend is not None and spend.measured else None,
         )
 
     def _publish(
@@ -970,6 +989,7 @@ class Reviewer:
         bundle,
         findings: list[render.Finding],
         summary_text: str,
+        spend: model.Spend | None = None,
     ) -> bool:
         cfg = self.cfg
         number = snapshot.number
@@ -1040,7 +1060,14 @@ class Reviewer:
             self.store.finish_post(cfg.repo, number, head_sha, "review")
             self.store.record_review(cfg.repo, number, head_sha, f"DRY-RUN:{event}")
             self._log_review_event(
-                number, head_sha, f"DRY-RUN:{event}", findings, blockers, placed, summary_text
+                number,
+                head_sha,
+                f"DRY-RUN:{event}",
+                findings,
+                blockers,
+                placed,
+                summary_text,
+                spend,
             )
             return True
 
@@ -1060,7 +1087,7 @@ class Reviewer:
         self.store.finish_post(cfg.repo, number, head_sha, "review")
         self.store.record_review(cfg.repo, number, head_sha, event)
         self._log_review_event(
-            number, head_sha, event, findings, blockers, placed, summary_text
+            number, head_sha, event, findings, blockers, placed, summary_text, spend
         )
 
         stale = threads.stale_thread_ids(snapshot, cfg, resolved_by_model=set())

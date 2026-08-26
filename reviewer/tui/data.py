@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..state import Store
-from .models import Activity, Merge, PullRequest, key_of
+from .models import Activity, Merge, PullRequest, ReviewCost, key_of
 from .session import Session
 
 PAGE_SIZE = 25
@@ -36,11 +36,17 @@ def open_pull_requests(store: Store, repos: tuple[str, ...]) -> tuple[PullReques
     """
     in_flight = store.active_reviews(list(repos))
     reviewed = store.reviewed_pull_requests(list(repos))
+    # One query for every row's most recent pass, rather than one per row: the
+    # board redraws on a timer.
+    last_pass = store.latest_review_events(list(repos))
     return tuple(
         PullRequest.from_row(
             row,
             activity=Activity.from_row(in_flight.get(key_of(row))),
             reviewed=key_of(row) in reviewed,
+            cost=ReviewCost.from_row(
+                last_pass.get((row.get("repo"), row.get("pr_number")))
+            ),
         )
         for row in store.list_pr_view(list(repos))
     )

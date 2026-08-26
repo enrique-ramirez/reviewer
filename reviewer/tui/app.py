@@ -34,7 +34,7 @@ from textual.widgets import (
     TabPane,
 )
 
-from .. import backfill, model
+from .. import backfill, model, summarize
 from ..state import Store
 from . import browser, data, filling, screens
 from .logs import LogRelay
@@ -74,6 +74,7 @@ class Runtime:
     status: Callable[[], Mapping[str, Any]]
     started_at: float
     backfiller: backfill.Runner | None = None
+    summariser: summarize.Runner | None = None
 
 
 class Dashboard(App[None]):
@@ -96,6 +97,7 @@ class Dashboard(App[None]):
         Binding("e", "focus_repos", "Repos"),
         Binding("E", "toggle_repos", "Fold repos"),
         Binding("b", "backfill", "Fill history"),
+        Binding("g", "describe", "Summarise"),
         Binding("l", "toggle_log", "Log"),
         Binding("r", "reload", "Refresh"),
         Binding("left_square_bracket", "page_back", "Prev page", show=False),
@@ -114,6 +116,7 @@ class Dashboard(App[None]):
         "page_back": HISTORY,
         "page_forward": HISTORY,
         "backfill": HISTORY,
+        "describe": HISTORY,
     }
 
     SIDEBAR_ACTIONS = frozenset({"focus_repos", "toggle_repos"})
@@ -205,6 +208,12 @@ class Dashboard(App[None]):
     def asking(self) -> bool:
         return isinstance(self.screen, Ask)
 
+    def summary_status(self) -> filling.SummaryStatus:
+        runner = self.runtime.summariser
+        if runner is None:
+            return filling.SummaryStatus()
+        return filling.SummaryStatus.from_status(runner.status())
+
     def backfill_status(self) -> filling.BackfillStatus:
         runner = self.runtime.backfiller
         if runner is None:
@@ -224,6 +233,7 @@ class Dashboard(App[None]):
             return
         self.reload()
         self._advance_backfill()
+        self._advance_summaries()
 
     def reload(self) -> None:
         now = time.time()
@@ -254,7 +264,10 @@ class Dashboard(App[None]):
                 session=self.session,
                 page=page,
                 can_backfill=self.runtime.backfiller is not None,
-                note=filling.progress_note(self.backfill_status(), self._frame),
+                # A backfill takes the line when both are going: it is the one
+                # with an end in sight worth watching.
+                note=filling.progress_note(self.backfill_status(), self._frame)
+                or filling.summary_note(self.summary_status(), self._frame),
             )
         )
 
@@ -523,6 +536,52 @@ class Dashboard(App[None]):
             runner.dismiss()
             self.history.table.invalidate()
 
+    # --------------------------------------------------------- summarising
+
+    def action_describe(self) -> None:
+        """Write a summary for the merge under the cursor.
+
+        The one place a model call is bought by a keystroke rather than by a
+        pull request changing, so it is deliberately one row at a time and never
+        repeats work that is already done.
+        """
+        runner = self.runtime.summariser
+        if self.typing or self.tab != HISTORY or self.asking:
+            return
+        if runner is None:
+            self.notify("summarising needs the watch loop running", timeout=4)
+            return
+
+        record = self.view.current
+        if record is None:
+            return
+        if getattr(record, "described_by_model", False):
+            # Already paid for. Rewriting one is a rarer thing to want than
+            # pressing g by accident on a row that already reads fine.
+            self.notify(f"#{record.number} already has a summary", timeout=3)
+            return
+
+        if runner.request(record.repo, record.number):
+            self.notify(f"summarising #{record.number}…", timeout=3)
+        else:
+            self.notify(f"#{record.number} is already queued", timeout=3)
+
+    def _advance_summaries(self) -> None:
+        """Notice when the summary thread has finished, from the poll timer."""
+        runner = self.runtime.summariser
+        if runner is None or self.asking:
+            return
+        status = self.summary_status()
+        if not status.finished:
+            return
+        self.notify(
+            status.message or "summarising finished",
+            timeout=5,
+            severity="error" if status.failed_outright else "information",
+        )
+        runner.dismiss()
+        self.history.table.invalidate()
+
     def _answer_backfill(
         self, reply: str | None, status: filling.BackfillStatus
     ) -> None:
@@ -549,6 +608,7 @@ class Dashboard(App[None]):
         return (
             *board_view.work_in_flight(self.pull_requests, time.time()),
             *filling.in_flight_lines(self.backfill_status()),
+            *filling.summary_in_flight(self.summary_status()),
         )
 
     def _answer_quit(self, reply: str | None) -> None:

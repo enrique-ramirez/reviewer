@@ -94,6 +94,70 @@ def _reviews(row: Row) -> tuple[Review, ...]:
 
 
 @dataclass(frozen=True, slots=True)
+class ReviewCost:
+    """What the last pass over a pull request cost, as recorded at the time.
+
+    Every field is optional because providers differ in what they report and
+    some report nothing at all. A round that only knows how long it took still
+    has something worth saying.
+    """
+
+    calls: int = 0
+    seconds: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+    cost_usd: float = 0.0
+    provider: str = ""
+    model: str = ""
+
+    @property
+    def known(self) -> bool:
+        return bool(self.seconds or self.output_tokens)
+
+    @property
+    def tokens(self) -> int:
+        """Everything the model read and wrote, cache included."""
+        return self.input_tokens + self.output_tokens + self.cached_tokens
+
+    @property
+    def label(self) -> str:
+        """Which model did it, in as few words as carry meaning."""
+        if self.model and self.provider:
+            return f"{self.provider} · {self.model}"
+        return self.model or self.provider
+
+    @classmethod
+    def from_merge(cls, row: Row) -> "ReviewCost | None":
+        """The same figures off a merged row, where they are lifetime totals."""
+        cost = cls(
+            seconds=float(row.get("review_seconds") or 0.0),
+            input_tokens=_count(row, "review_input_tokens"),
+            output_tokens=_count(row, "review_output_tokens"),
+            cached_tokens=_count(row, "review_cached_tokens"),
+            cost_usd=float(row.get("review_cost_usd") or 0.0),
+            model=_text(row, "review_model"),
+        )
+        return cost if cost.known else None
+
+    @classmethod
+    def from_row(cls, row: Row | None) -> "ReviewCost | None":
+        if not row:
+            return None
+        cost = cls(
+            calls=_count(row, "calls"),
+            seconds=float(row.get("duration_seconds") or 0.0),
+            input_tokens=_count(row, "input_tokens"),
+            output_tokens=_count(row, "output_tokens"),
+            cached_tokens=_count(row, "cached_tokens"),
+            cost_usd=float(row.get("cost_usd") or 0.0),
+            provider=_text(row, "provider"),
+            model=_text(row, "model"),
+        )
+        return cost if cost.known else None
+
+
+@dataclass(frozen=True, slots=True)
 class PullRequest:
     """One open pull request, as the board knows it."""
 
@@ -126,6 +190,8 @@ class PullRequest:
     activity: Activity | None = None
     reviewed_by_us: bool = False
     """Whether we have ever posted a review on it, from the event log."""
+    cost: ReviewCost | None = None
+    """What the most recent pass cost. None when nothing was measured."""
 
     @property
     def key(self) -> str:
@@ -146,6 +212,7 @@ class PullRequest:
         *,
         activity: Activity | None = None,
         reviewed: bool = False,
+        cost: "ReviewCost | None" = None,
     ) -> "PullRequest":
         return cls(
             repo=_text(row, "repo"),
@@ -176,6 +243,7 @@ class PullRequest:
             last_action=_text(row, "last_action"),
             activity=activity,
             reviewed_by_us=reviewed,
+            cost=cost,
         )
 
 
@@ -204,6 +272,8 @@ class Merge:
     last_event: str
     description: str
     description_source: str
+    cost: ReviewCost | None = None
+    """What reviewing it cost, totalled. None when we never reviewed it."""
 
     @property
     def key(self) -> str:
@@ -256,4 +326,5 @@ class Merge:
             last_event=_text(row, "last_event"),
             description=_text(row, "description"),
             description_source=_text(row, "description_source"),
+            cost=ReviewCost.from_merge(row),
         )

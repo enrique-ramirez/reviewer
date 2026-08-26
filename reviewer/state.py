@@ -140,6 +140,16 @@ CREATE TABLE IF NOT EXISTS review_events (
     blockers    INTEGER NOT NULL DEFAULT 0,
     inline      INTEGER NOT NULL DEFAULT 0,
     summary     TEXT,
+    -- What the round cost. Nullable throughout: not every provider reports
+    -- usage, and rows written before these columns existed have none.
+    calls            INTEGER,
+    duration_seconds REAL,
+    input_tokens     INTEGER,
+    output_tokens    INTEGER,
+    cached_tokens    INTEGER,
+    cost_usd         REAL,
+    provider         TEXT,
+    model            TEXT,
     created_at  REAL NOT NULL
 );
 
@@ -170,6 +180,15 @@ CREATE TABLE IF NOT EXISTS merged_prs (
     our_comments       INTEGER NOT NULL DEFAULT 0,
     our_blockers       INTEGER NOT NULL DEFAULT 0,
     last_event         TEXT,
+    -- What reviewing it cost us, totalled over every round and frozen here at
+    -- merge time. The events themselves survive, but this row is what the
+    -- History tab reads and a query per row would turn a page into 25 of them.
+    review_seconds       REAL,
+    review_input_tokens  INTEGER,
+    review_output_tokens INTEGER,
+    review_cached_tokens INTEGER,
+    review_cost_usd      REAL,
+    review_model         TEXT,
     description        TEXT,
     description_source TEXT,
     description_tries  INTEGER NOT NULL DEFAULT 0,
@@ -191,6 +210,14 @@ CREATE INDEX IF NOT EXISTS merged_prs_merged   ON merged_prs (merged_at DESC);
 # because SQLite has no list type, and decoded on the way back out so callers
 # never see the encoding.
 JSON_COLUMNS = ("labels", "reviews", "requested_reviewers")
+
+
+def _sum(row: Any, name: str) -> float:
+    """A SUM() that came back NULL means no row had a figure. Read it as zero."""
+    if row is None:
+        return 0
+    value = row[name]
+    return value if isinstance(value, (int, float)) else 0
 
 
 def _decode_list(raw: Any) -> list[Any]:
@@ -258,6 +285,22 @@ class Store:
         },
         "merged_prs": {
             "backfilled": "INTEGER NOT NULL DEFAULT 0",
+            "review_seconds": "REAL",
+            "review_input_tokens": "INTEGER",
+            "review_output_tokens": "INTEGER",
+            "review_cached_tokens": "INTEGER",
+            "review_cost_usd": "REAL",
+            "review_model": "TEXT",
+        },
+        "review_events": {
+            "calls": "INTEGER",
+            "duration_seconds": "REAL",
+            "input_tokens": "INTEGER",
+            "output_tokens": "INTEGER",
+            "cached_tokens": "INTEGER",
+            "cost_usd": "REAL",
+            "provider": "TEXT",
+            "model": "TEXT",
         },
     }
 
@@ -582,12 +625,16 @@ class Store:
         blockers: int = 0,
         inline: int = 0,
         summary: str = "",
+        spend: Any = None,
     ) -> None:
         self.conn.execute(
             """
             INSERT INTO review_events (repo, pr_number, head_sha, event, findings,
-                                       blockers, inline, summary, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       blockers, inline, summary, calls,
+                                       duration_seconds, input_tokens,
+                                       output_tokens, cached_tokens, cost_usd,
+                                       provider, model, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 repo,
@@ -598,10 +645,42 @@ class Store:
                 blockers,
                 inline,
                 summary or None,
+                # Left NULL rather than zeroed when nothing was measured, so a
+                # provider that reports no usage is distinguishable from a
+                # review that genuinely cost nothing.
+                getattr(spend, "calls", None),
+                getattr(spend, "seconds", None),
+                getattr(spend, "input_tokens", None),
+                getattr(spend, "output_tokens", None),
+                getattr(spend, "cached_tokens", None),
+                getattr(spend, "cost_usd", None) or None,
+                getattr(spend, "provider", None) or None,
+                getattr(spend, "model", None) or None,
                 time.time(),
             ),
         )
         self.conn.commit()
+
+    def latest_review_events(self, repos: list[str]) -> dict[tuple[str, int], dict[str, Any]]:
+        """The most recent round for each pull request, keyed by repo and number.
+
+        One query rather than one per row: the board redraws on a timer, and a
+        query per open pull request would turn a poll into a fan of them.
+        """
+        if not repos:
+            return {}
+        marks = ",".join("?" for _ in repos)
+        rows = self.conn.execute(
+            f"""
+            SELECT e.* FROM review_events e
+            JOIN (
+                SELECT repo, pr_number, MAX(id) AS id FROM review_events
+                WHERE repo IN ({marks}) GROUP BY repo, pr_number
+            ) last ON e.id = last.id
+            """,
+            repos,
+        ).fetchall()
+        return {(row["repo"], row["pr_number"]): dict(row) for row in rows}
 
     def has_reviewed(self, repo: str, pr_number: int) -> bool:
         """Whether we ever posted anything on this pull request.
@@ -658,13 +737,19 @@ class Store:
             """
             SELECT COUNT(*) AS rounds,
                    COALESCE(SUM(inline), 0)   AS comments,
-                   COALESCE(SUM(blockers), 0) AS blockers
+                   COALESCE(SUM(blockers), 0) AS blockers,
+                   SUM(calls)            AS calls,
+                   SUM(duration_seconds) AS duration_seconds,
+                   SUM(input_tokens)     AS input_tokens,
+                   SUM(output_tokens)    AS output_tokens,
+                   SUM(cached_tokens)    AS cached_tokens,
+                   SUM(cost_usd)         AS cost_usd
             FROM review_events WHERE repo = ? AND pr_number = ?
             """,
             (repo, pr_number),
         ).fetchone()
         last = self.conn.execute(
-            "SELECT event, summary FROM review_events "
+            "SELECT event, summary, provider, model FROM review_events "
             "WHERE repo = ? AND pr_number = ? ORDER BY id DESC LIMIT 1",
             (repo, pr_number),
         ).fetchone()
@@ -675,6 +760,16 @@ class Store:
             "blockers": int(row["blockers"]) if row else 0,
             "last_event": last["event"] if last else None,
             "summary": (last["summary"] if last else None) or "",
+            # Totalled over every round, so this answers "what did reviewing
+            # this pull request cost" rather than "what did the last pass cost".
+            "calls": _sum(row, "calls"),
+            "duration_seconds": float(_sum(row, "duration_seconds")),
+            "input_tokens": _sum(row, "input_tokens"),
+            "output_tokens": _sum(row, "output_tokens"),
+            "cached_tokens": _sum(row, "cached_tokens"),
+            "cost_usd": float(_sum(row, "cost_usd")),
+            "provider": (last["provider"] if last else None) or "",
+            "model": (last["model"] if last else None) or "",
         }
         if not tally["rounds"]:
             # Reviewed before the events table existed. The round count is lost,

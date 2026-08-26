@@ -119,6 +119,7 @@ something where you are.
 | `t` | History | cycle date range |
 | `[` `]` | History | page |
 | `b` | History | fill in past history (press again to stop) |
+| `g` | History | write a summary for the selected merge — one model call |
 | `Escape` | History | clear the filters |
 | `e` | any | focus the repository sidebar (only with 2+ repos) |
 | `E` | any | fold the sidebar to a rail, and back |
@@ -203,6 +204,30 @@ merging from now on still gets a proper summary.
 
 It commits as it goes, so `Ctrl-C` keeps everything already fetched, and running
 it again skips what is already on record. Each repository is tracked separately.
+
+### Summarising one of them anyway
+
+Free history is the right default — a sweep of two thousand merges should not
+cost two thousand model calls. But the odd row is worth reading properly, and
+that is what `g` is for: put the cursor on any merge in the History tab and press
+it.
+
+What comes back is stored exactly as a summary written during a tick would be —
+same column, same source, kept for good. Read it once and it is there next time;
+nothing re-asks for it, and nothing overwrites it.
+
+- It reads the pull request and its file list from GitHub, then makes **one**
+  model call, on whatever `merge_summary` is pointed at — the cheapest tier you
+  have configured.
+- Rows that already carry a written summary are refused rather than rewritten, so
+  a stray keypress cannot buy the same sentence twice.
+- Press it on several rows and they queue, one call at a time.
+- It runs on its own thread, so the reviewer carries on behind it, and the
+  History status bar says which one is being written.
+
+The Summary tab exists because automating review makes it easy to stop noticing
+what is landing. This is the same idea pointed backwards: the changes that landed
+before the tool was watching.
 
 ## When it reviews, and when it does not
 
@@ -636,6 +661,36 @@ terminal to draw a dashboard on.
 A dry run writes to a separate database, so repeating one is free and the live
 state is untouched. A PID lockfile means a tick arriving while the previous one
 is still working is skipped rather than queued, so a slow review cannot pile up.
+
+### What a review cost
+
+Every pass records what it took, and the detail panes show it. On the Dashboard,
+under `last pass` — the most recent round:
+
+```
+last pass
+  COMMENT
+  1m 59s · 2 calls · 1.1k out · 42.3k in · 41.8k cached · $0.448
+  claude · claude-opus-5
+```
+
+On History, totalled over every round a pull request took before it merged:
+
+```
+from us    4 comment(s) over 2 round(s)
+ended on   APPROVE
+cost       4m 46s · 86.3k tokens · $0.448   claude · claude-opus-5
+```
+
+`2 calls` appears only when the axes were split. Fresh and cached input are kept
+apart because only the fresh half responds to trimming a prompt, and the two are
+billed nothing like the same.
+
+Every part is conditional, because providers report different things — Claude
+Code gives a price, others give tokens and no price, some give neither. A
+provider that reported nothing drops the line rather than printing a zero, and so
+do reviews from before this was recorded: *nobody counted* and *it cost nothing*
+look identical on screen and mean opposite things.
 
 ### What a dry run tells you about cost
 

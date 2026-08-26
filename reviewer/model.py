@@ -140,6 +140,65 @@ class ModelResult:
     usage: dict[str, Any]
     duration_seconds: float
     provider: str = ""
+    model: str = ""
+
+
+def _int(value: Any) -> int:
+    return int(value) if isinstance(value, (int, float)) else 0
+
+
+def _float(value: Any) -> float:
+    return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+@dataclass
+class Spend:
+    """What one review cost, totalled over however many calls it took.
+
+    A review is one call most of the time and two when the axes are split, so
+    the interesting number is the total rather than any single call's. Kept
+    separate from ``usage`` because that is whatever a provider chose to report,
+    in whatever shape it chose to report it, and this has to survive being
+    written to a column.
+
+    Fresh and cached input are counted apart on purpose. Adding them would read
+    as one number you could act on, when the two are billed nothing like the
+    same and only the fresh half responds to trimming a prompt.
+    """
+
+    calls: int = 0
+    seconds: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+    cost_usd: float = 0.0
+    provider: str = ""
+    model: str = ""
+
+    def add(self, result: ModelResult) -> None:
+        usage = result.usage
+        self.calls += 1
+        self.seconds += result.duration_seconds
+        self.input_tokens += _int(usage.get("input_tokens")) + _int(
+            usage.get("cache_creation_input_tokens")
+        )
+        self.output_tokens += _int(usage.get("output_tokens"))
+        self.cached_tokens += _int(usage.get("cache_read_input_tokens"))
+        self.cost_usd += _float(usage.get("total_cost_usd"))
+        # First one wins: a split review runs both halves on the same model, and
+        # a blank from a provider that reports nothing should not erase a name
+        # an earlier call did report.
+        self.provider = self.provider or result.provider
+        self.model = self.model or result.model
+
+    @property
+    def measured(self) -> bool:
+        """Whether there is anything here worth showing.
+
+        Not every provider reports usage. A row that only knows how long it took
+        is still worth having; one that knows nothing at all is not.
+        """
+        return bool(self.calls and (self.seconds or self.output_tokens))
 
 
 def _child_env() -> dict[str, str]:
@@ -275,4 +334,5 @@ def run(
         usage=reply.usage,
         duration_seconds=duration,
         provider=adapter.name,
+        model=str(cfg.get("model") or ""),
     )

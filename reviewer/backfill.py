@@ -229,6 +229,16 @@ def run(
                     "our_comments": tally["comments"],
                     "our_blockers": tally["blockers"],
                     "last_event": tally["last_event"],
+                    "review_seconds": tally["duration_seconds"] or None,
+                    "review_input_tokens": tally["input_tokens"] or None,
+                    "review_output_tokens": tally["output_tokens"] or None,
+                    "review_cached_tokens": tally["cached_tokens"] or None,
+                    "review_cost_usd": tally["cost_usd"] or None,
+                    "review_model": (
+                        f"{tally['provider']} · {tally['model']}"
+                        if tally["provider"] and tally["model"]
+                        else tally["provider"] or tally["model"] or None
+                    ),
                     # The author's own one-line account of the change. Marked as
                     # a title so the interface does not present it as a summary
                     # this tool wrote.

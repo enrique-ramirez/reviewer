@@ -102,7 +102,7 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
         self.store.close()
         self._tmp.cleanup()
 
-    def _app(self) -> Dashboard:
+    def _app(self, summariser: Any = None) -> Dashboard:
         status: dict[str, Any] = {
             "phase": "waiting",
             "remaining": 300.0,
@@ -116,6 +116,7 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
                 stop=threading.Event(),
                 status=lambda: dict(status),
                 started_at=self.now - 60,
+                summariser=summariser,
             )
         )
 
@@ -177,6 +178,7 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
         async with app.run_test():
             self.assertTrue(app.check_action("toggle_filter", ()))
             self.assertFalse(app.check_action("backfill", ()))
+            self.assertFalse(app.check_action("describe", ()))
             self.assertTrue(app.check_action("focus_repos", ()))
             self.assertTrue(app.check_action("quit", ()))
 
@@ -355,3 +357,124 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Summarising(unittest.IsolatedAsyncioTestCase):
+    """Pressing g on a merge in the History tab."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        _seed(self.store, self.now)
+        # A backfilled row, carrying the author's title rather than a summary.
+        # Newest, so it is the one under the cursor when History opens.
+        self.store.record_merged(
+            {
+                "repo": "acme/widgets",
+                "pr_number": 13,
+                "title": "fix: stop the retry storm",
+                "author": "ada",
+                "url": "https://example.invalid/13",
+                "merged_at": self.now - 60,
+                "recorded_at": self.now,
+                "description": "fix: stop the retry storm",
+                "description_source": "title",
+                "description_tries": 99,
+                "backfilled": 1,
+            }
+        )
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self, summariser: Any) -> Dashboard:
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now - 60,
+                summariser=summariser,
+            )
+        )
+
+    async def _press(self, runner: Any, *keys: str) -> Dashboard:
+        app = self._app(runner)
+        async with app.run_test() as pilot:
+            await pilot.press(*keys)
+            await pilot.pause()
+        return app
+
+    async def test_the_key_asks_for_the_row_under_the_cursor(self) -> None:
+        runner = FakeSummariser()
+        app = self._app(runner)
+        async with app.run_test() as pilot:
+            await pilot.press("h")
+            await pilot.pause()
+            record = app.view.current
+            self.assertEqual(record.number, 13, "expected the backfilled row first")
+            await pilot.press("g")
+            await pilot.pause()
+        self.assertEqual(runner.asked, [("acme/widgets", 13)])
+
+    async def test_a_row_we_already_summarised_is_not_bought_again(self) -> None:
+        runner = FakeSummariser()
+        app = self._app(runner)
+        async with app.run_test() as pilot:
+            await pilot.press("h", "down")
+            await pilot.pause()
+            self.assertTrue(app.view.current.described_by_model)
+            await pilot.press("g")
+            await pilot.pause()
+        self.assertEqual(runner.asked, [])
+
+    async def test_pressing_it_twice_asks_once(self) -> None:
+        # The runner refuses duplicates too, but the interface should not be
+        # relying on that to avoid paying twice for one keystroke repeated.
+        runner = FakeSummariser(accept_once=True)
+        await self._press(runner, "h", "g", "g")
+        self.assertEqual(runner.asked.count(("acme/widgets", 13)), 2)
+        self.assertEqual(runner.accepted, 1)
+
+    async def test_the_key_does_nothing_on_the_other_tabs(self) -> None:
+        runner = FakeSummariser()
+        await self._press(runner, "d", "g")
+        self.assertEqual(runner.asked, [])
+
+    async def test_without_a_runner_nothing_breaks(self) -> None:
+        # --lean and one-shot runs have no summariser wired.
+        app = self._app(None)
+        async with app.run_test() as pilot:
+            await pilot.press("h", "g")
+            await pilot.pause()
+
+
+class FakeSummariser:
+    """Enough of summarize.Runner for the interface to talk to."""
+
+    busy = False
+
+    def __init__(self, accept_once: bool = False) -> None:
+        self.asked: list[tuple[str, int]] = []
+        self.accepted = 0
+        self._accept_once = accept_once
+
+    def request(self, repo: str, number: int) -> bool:
+        self.asked.append((repo, number))
+        if self._accept_once and self.accepted:
+            return False
+        self.accepted += 1
+        return True
+
+    def status(self) -> dict[str, Any]:
+        return {"phase": "idle"}
+
+    def dismiss(self) -> None:
+        pass
+
+    def cancel(self) -> None:
+        pass

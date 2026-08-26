@@ -199,12 +199,46 @@ def _threads(pull_request: PullRequest) -> Text | None:
     return prose.field("threads", ", ".join(parts), style)
 
 
+def _cost_lines(pull_request: PullRequest) -> Text | None:
+    """What the last pass cost, for anyone deciding whether it was worth it.
+
+    Every part is conditional. Providers differ in what they report — some give
+    a price, some give tokens, some give neither — and a zero printed where a
+    provider simply said nothing would read as a measurement.
+    """
+    cost = pull_request.cost
+    if cost is None:
+        return None
+
+    parts: list[str] = []
+    if cost.seconds:
+        parts.append(formatting.elapsed(cost.seconds))
+    if cost.calls > 1:
+        parts.append(f"{cost.calls} calls")
+    if cost.output_tokens:
+        parts.append(f"{formatting.tokens(cost.output_tokens)} out")
+    if cost.input_tokens:
+        parts.append(f"{formatting.tokens(cost.input_tokens)} in")
+    if cost.cached_tokens:
+        parts.append(f"{formatting.tokens(cost.cached_tokens)} cached")
+    if cost.cost_usd:
+        parts.append(formatting.money(cost.cost_usd))
+    if not parts:
+        return None
+
+    return prose.join(
+        prose.line(f"  {' · '.join(parts)}", theme.MUTED),
+        prose.line(f"  {cost.label}", theme.FAINT) if cost.label else None,
+    )
+
+
 def _last_pass(pull_request: PullRequest) -> Text | None:
     if not status.reports_last_pass(pull_request):
         return None
     return prose.join(
         prose.line("\nlast pass", theme.MUTED),
         prose.line(f"  {pull_request.last_action or 'not looked at yet'}"),
+        _cost_lines(pull_request),
     )
 
 
