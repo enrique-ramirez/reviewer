@@ -3,8 +3,10 @@
 **Dashboard** is the live board — what is open right now and what wants a human.
 **Summary** is what landed while you were watching, so automating the reviewing
 does not mean losing track of what is going into the repository. **History** is
-the same record without the time limit. The next-scan line and the log pane sit
-below all three, because they describe the run rather than any one view.
+the same record without the time limit. The next-scan line lives in the header
+and the log pane below all three, because both describe the run rather than any
+one view — and a run-wide line wedged between a tab and the log read as
+belonging to whichever pane was above it.
 
 The reviewer runs on a background thread and writes to SQLite; this reads the
 same database on a timer and calls neither GitHub nor the model. Nothing here
@@ -25,6 +27,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
+from textual.widgets._header import HeaderClock, HeaderIcon, HeaderTitle
 from textual.widgets import (
     Footer,
     Header,
@@ -37,7 +40,7 @@ from textual.widgets import (
 
 from .. import backfill, model, summarize
 from ..state import Store
-from . import browser, data, filling, screens
+from . import browser, data, filling, screens, theme
 from .logs import LogRelay
 from .models import PullRequest
 from .screens import Ask
@@ -49,19 +52,46 @@ from .views.merges import HistoryContext, HistoryView, SummaryView
 from .views.sidebar import RepoRow, RepoSidebar, RepoStats, SidebarHeader, summarise
 from .widgets import PacTimer, Progress
 
+
+class RunHeader(Header):
+    """Textual's header, with the run's own status line added to it.
+
+    Composed after the clock on purpose: two widgets docked right stack inward
+    from the edge, so the clock keeps the corner and this sits to its left.
+    """
+
+    def __init__(self, timer: PacTimer) -> None:
+        super().__init__(show_clock=True)
+        self._timer = timer
+
+    def compose(self) -> ComposeResult:
+        yield HeaderIcon().data_bind(Header.icon)
+        yield HeaderTitle()
+        yield HeaderClock().data_bind(Header.time_format)
+        yield self._timer
+
 POLL_SECONDS = 1.0
 SPIN_SECONDS = 0.12
 
 DASHBOARD, SUMMARY, HISTORY = "dashboard", "summary", "history"
 
 
-def tab_label(title: str) -> str:
-    """A tab's name with its hotkey letter underlined.
+NAME = "Blinky"
+"""After Pac-Man's red ghost — the one already at the end of the countdown."""
+
+
+def tab_label(title: str, count: int | None = None) -> str:
+    """A tab's name with its hotkey letter underlined, and what it holds.
 
     Textual markup rather than a ``rich.Text``: ``TabPane`` puts its title
     through ``Content.from_markup``, which takes a string.
+
+    The count rides on the tab rather than in the window title because it is
+    true of one tab and not of the others — a subtitle saying "6 open" while
+    you were reading History was answering a question nobody had asked.
     """
-    return f"[u]{title[0]}[/u]{title[1:]}"
+    underlined = f"[u]{title[0]}[/u]{title[1:]}"
+    return underlined if count is None else f"{underlined} ({count})"
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +110,7 @@ class Runtime:
 
 class Dashboard(App[None]):
     CSS_PATH = "styles.tcss"
-    TITLE = "pr-reviewer"
+    TITLE = NAME
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -137,7 +167,7 @@ class Dashboard(App[None]):
     # ------------------------------------------------------------- layout
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield RunHeader(PacTimer(self._progress, self._longest_running))
         with Horizontal(id="shell"):
             if self.session.multi_repo:
                 yield RepoSidebar(len(self.session.entries))
@@ -149,8 +179,6 @@ class Dashboard(App[None]):
                         yield SummaryView()
                     with TabPane(tab_label("History"), id=HISTORY):
                         yield HistoryView()
-                # Outside the tabs: these describe the run, not any one view.
-                yield PacTimer(self._progress, self._longest_running)
                 # Wrapped rather than clipped: a scan line carries the PR title,
                 # and losing the end of it is what makes the log worth reading.
                 yield RichLog(id="log", markup=False, highlight=False, wrap=True)
@@ -273,7 +301,7 @@ class Dashboard(App[None]):
         self.repo_stats = summarise(everything, self.session)
         self.pull_requests = board_view.in_view(everything, self.session)
         self.board.show(self.pull_requests, now=now, frame=self._frame)
-        self.sub_title = board_view.subtitle(self.pull_requests, self.session)
+        self._retitle()
 
     def _reload_summary(self, now: float) -> None:
         self.summary.show(
@@ -330,6 +358,24 @@ class Dashboard(App[None]):
                 or filling.summary_note(self.summary_status(), self._frame),
             )
         )
+
+    def _retitle(self) -> None:
+        """Name the run and what it is scoped to, and count the open board.
+
+        Both follow the sidebar, so switching repository renames the window and
+        recounts the tab in one go.
+        """
+        self.title = f"{theme.GHOST} {NAME}: {self.session.scope_label}"
+        self.sub_title = board_view.subtitle(self.pull_requests, self.session)
+        label = tab_label("Dashboard", len(self.pull_requests))
+        try:
+            tab = self.query_one(TabbedContent).get_tab(DASHBOARD)
+        except NoMatches:
+            return
+        # Only on a change: the poll runs every second and relabelling a tab
+        # rebuilds it.
+        if str(tab.label) != label:
+            tab.label = label
 
     def _reload_sidebar(self) -> None:
         sidebar = self.sidebar

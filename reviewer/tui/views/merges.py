@@ -245,23 +245,23 @@ def history_status(context: HistoryContext) -> Text:
     if context.note is not None:
         return context.note
     session, page = context.session, context.page
+    # Which repositories are in scope is not repeated here: the sidebar shows
+    # it, highlighted, and saying it twice made the busiest line on the screen
+    # carry the least new information.
     return prose.join(
         prose.span("  "),
         prose.span(f"{page.total:,} merged", theme.KEY),
-        _scope_span(session) if session.multi_repo else None,
         prose.span(f"   author ~ {session.author}", theme.NEEDS_YOU)
         if session.author
-        else None,
-        prose.span(f"   page {page.number + 1}/{page.pages}", theme.MUTED)
-        if page.pages > 1
         else None,
     )
 
 
-def _scope_span(session: Session) -> Text:
-    if session.whole_estate:
-        return prose.span("   all repos", theme.MUTED)
-    return prose.span(f"   {session.scope[0]}", "cyan")
+def history_pager(context: HistoryContext) -> Text:
+    page = context.page
+    if context.note is not None or page.pages <= 1:
+        return Text()
+    return prose.span(f"page {page.number + 1}/{page.pages}", theme.MUTED)
 
 
 def history_empty(context: HistoryContext) -> Text:
@@ -301,7 +301,7 @@ class HistoryView(RecordView):
             session=Session(repos=(), started_at=0.0), page=MergePage((), 0)
         )
 
-    def extras(self) -> Iterable[Any]:
+    def filters(self) -> Iterable[Any]:
         return (
             Horizontal(
                 Label(DATE_LABEL, id="date_label"),
@@ -314,8 +314,10 @@ class HistoryView(RecordView):
                 ),
                 id="history_filters",
             ),
-            Input(placeholder="author contains…", id=AUTHOR_FILTER_ID),
         )
+
+    def overlays(self) -> Iterable[Any]:
+        return (Input(placeholder="author contains…", id=AUTHOR_FILTER_ID),)
 
     @property
     def author_box(self) -> Input:
@@ -356,3 +358,6 @@ class HistoryView(RecordView):
 
     def status_text(self) -> Text:
         return history_status(self._shown)
+
+    def pager_text(self) -> Text:
+        return history_pager(self._shown)

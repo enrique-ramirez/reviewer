@@ -260,7 +260,7 @@ def run(
 
     timeout = int(cfg.get("timeout_seconds") or 900)
 
-    with tempfile.TemporaryDirectory(prefix="pr-reviewer-cwd-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="blinky-cwd-") as scratch:
         scratch_dir = Path(scratch)
         call = adapter.prepare(
             cfg,

@@ -61,12 +61,17 @@ class Counts(unittest.TestCase):
         self.assertEqual(counts, {"acme/widgets": 2})
 
     def test_the_subtitle_says_how_many_want_you(self) -> None:
+        # And not how many are open: that is on the Dashboard tab now, which is
+        # the thing it is true of.
         rows = [pull_request(), pull_request(pr_number=2, needs_human=1)]
-        self.assertEqual(board.subtitle(rows, session()), "2 open — 1 need you")
+        self.assertEqual(board.subtitle(rows, session()), "1 need you")
         self.assertEqual(
             board.subtitle(rows, session(only_attention=True)),
-            "2 open — 1 need you  [filtered]",
+            "1 need you · filtered",
         )
+
+    def test_a_quiet_board_says_nothing_after_the_title(self) -> None:
+        self.assertEqual(board.subtitle([pull_request()], session()), "")
 
     def test_the_longest_running_review_drives_the_timer(self) -> None:
         rows = [

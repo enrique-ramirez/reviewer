@@ -1,8 +1,11 @@
-# pr-reviewer
+# ᗣ Blinky
 
 **Your code review, running without you.** One terminal window, on your own
 machine, watching your repositories and posting reviews to GitHub under your
 account — in your voice, clearly labelled as AI-written.
+
+Named after Pac-Man's red ghost, who is already waiting at the end of the
+countdown.
 
 Between scans, a Pac-Man eats his way along a line of dots toward a ghost, so
 you know how long you have. Fold the sidebar away and your repositories become
@@ -49,7 +52,7 @@ So this one is built the other way round:
 ## Quick start
 
 ```sh
-git clone <this repo> && cd pr-reviewer
+git clone <this repo> && cd blinky
 ./run.sh --init     # a few questions, writes the config
 ./run.sh --check    # can the token reach everything?
 ./run.sh            # go

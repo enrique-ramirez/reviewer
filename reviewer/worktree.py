@@ -85,7 +85,10 @@ def _run(
     return last
 
 
-WORKTREE_PREFIX = "pr-reviewer-"
+WORKTREE_PREFIX = "blinky-"
+
+#: Directories an older build left behind are still ours to clean up.
+LEGACY_WORKTREE_PREFIXES = ("pr-reviewer-",)
 
 
 def _registered_worktrees(repo: Path) -> list[Path]:
@@ -100,7 +103,7 @@ def _registered_worktrees(repo: Path) -> list[Path]:
 
 
 def _is_ours(path: Path) -> bool:
-    return path.name.startswith(WORKTREE_PREFIX)
+    return path.name.startswith((WORKTREE_PREFIX, *LEGACY_WORKTREE_PREFIXES))
 
 
 def safe_prune(repo: Path) -> None:
@@ -156,7 +159,7 @@ class Checkout:
 def pr_checkout(repo: Path, pr_number: int, head_sha: str) -> Iterator[Checkout]:
     """Detached worktree at a PR's head, removed on the way out."""
     ref = f"{REF_NAMESPACE}/pr-{pr_number}"
-    workdir = Path(tempfile.mkdtemp(prefix=f"pr-reviewer-{pr_number}-"))
+    workdir = Path(tempfile.mkdtemp(prefix=f"{WORKTREE_PREFIX}{pr_number}-"))
     created = False
 
     try:

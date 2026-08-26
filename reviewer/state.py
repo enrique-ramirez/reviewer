@@ -1,4 +1,4 @@
-"""Persistent state, in SQLite, under ``~/.local/state/pr-reviewer/``.
+"""Persistent state, in SQLite, under ``~/.local/state/blinky/``.
 
 Deliberately outside the checkout: it holds PR titles and, under ``--debug``,
 diff content. Keeping it out of the repo means a stale ``.gitignore`` cannot turn
@@ -241,13 +241,44 @@ class PRState:
     review_round: int = 0
 
 
+LEGACY_STATE_DIR_NAME = "pr-reviewer"
+STATE_DIR_NAME = "blinky"
+
+
 def default_state_dir() -> Path:
-    override = os.environ.get("PR_REVIEWER_STATE_DIR")
+    override = os.environ.get("BLINKY_STATE_DIR") or os.environ.get(
+        "PR_REVIEWER_STATE_DIR"
+    )
     if override:
         return Path(override).expanduser()
     base = os.environ.get("XDG_STATE_HOME")
     root = Path(base).expanduser() if base else Path.home() / ".local" / "state"
-    return root / "pr-reviewer"
+    return root / STATE_DIR_NAME
+
+
+def adopt_legacy_state_dir(state_dir: Path) -> Path | None:
+    """Carry an older build's state over to the renamed directory.
+
+    The database in there is the whole history — every merge, every review, and
+    every summary already paid for. A rename that left it behind would look
+    exactly like the tool having forgotten everything.
+
+    One move, only when the new directory does not exist yet, and only for the
+    default location: someone who passed ``--state-dir`` meant that directory.
+    Returns where it came from, so the caller can say so.
+    """
+    if state_dir.name != STATE_DIR_NAME or state_dir.exists():
+        return None
+    legacy = state_dir.with_name(LEGACY_STATE_DIR_NAME)
+    if not legacy.is_dir():
+        return None
+    try:
+        legacy.rename(state_dir)
+    except OSError:
+        # Different filesystem, or no permission. Not worth failing over: a
+        # fresh directory is a working tool, just an empty one.
+        return None
+    return legacy
 
 
 class Store:

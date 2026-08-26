@@ -11,7 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-MARKER_PREFIX = "<!-- pr-reviewer"
+MARKER_PREFIX = "<!-- blinky"
+
+#: What the marker used to be. Comments already posted on live pull requests
+#: carry it, and they are still ours — a rename must not orphan them.
+LEGACY_MARKER_PREFIXES = ("<!-- pr-reviewer",)
 
 SEVERITY_ORDER = {"blocker": 0, "correctness": 1, "nit": 2, "note": 3}
 SEVERITY_LABEL = {
@@ -76,7 +80,10 @@ def marker(head_sha: str) -> str:
 
 
 def is_ours(body: str) -> bool:
-    return MARKER_PREFIX in (body or "")
+    body = body or ""
+    return MARKER_PREFIX in body or any(
+        prefix in body for prefix in LEGACY_MARKER_PREFIXES
+    )
 
 
 def inline_comment_body(finding: Finding) -> str:

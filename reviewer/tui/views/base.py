@@ -26,13 +26,33 @@ class RecordView(Vertical):
         self._records: tuple[Any, ...] = ()
 
     def compose(self) -> ComposeResult:
-        with Horizontal():
-            yield SyncedTable(self.COLUMNS)
-            yield DetailPane()
-        yield from self.extras()
-        yield StatusBar()
+        """Two columns, each owning what belongs to it.
 
-    def extras(self) -> Iterable[Any]:
+        The status line and the filters used to run the full width, under both
+        panes, which read as describing the whole screen. They describe the
+        list: how many rows there are, which page of them, what is filtering
+        them. So they live under the list, inside its column, and the divider
+        between the columns runs past them to say so.
+        """
+        with Horizontal():
+            with Vertical(classes="listing"):
+                yield SyncedTable(self.COLUMNS)
+                with Horizontal(classes="underbar"):
+                    # Three equal slots, so the middle one's centre is the
+                    # bar's centre and the outer two sit on its edges.
+                    yield StatusBar(classes="counts")
+                    yield StatusBar(classes="pager")
+                    yield from self.filters()
+                yield from self.overlays()
+            with Vertical(classes="details"):
+                yield DetailPane()
+
+    def filters(self) -> Iterable[Any]:
+        """Controls that sit at the right-hand end of the status line."""
+        return ()
+
+    def overlays(self) -> Iterable[Any]:
+        """Rows below the status line, shown only while they are being used."""
         return ()
 
     @property
@@ -45,7 +65,12 @@ class RecordView(Vertical):
 
     @property
     def status_bar(self) -> StatusBar:
-        return self.query_one(StatusBar)
+        return self.query_one("StatusBar.counts", StatusBar)
+
+    @property
+    def pager_bar(self) -> StatusBar:
+        """The middle slot. Empty on a view that does not page."""
+        return self.query_one("StatusBar.pager", StatusBar)
 
     @property
     def records(self) -> tuple[Any, ...]:
@@ -70,6 +95,7 @@ class RecordView(Vertical):
 
     def redraw_status(self) -> None:
         self.status_bar.update(self.status_text())
+        self.pager_bar.update(self.pager_text())
 
     @on(DataTable.RowHighlighted)
     def _follow_cursor(self) -> None:
@@ -89,3 +115,8 @@ class RecordView(Vertical):
 
     def status_text(self) -> Text:
         raise NotImplementedError
+
+    def pager_text(self) -> Text:
+        """Which page of how many. Centred, so it reads as being about the list
+        rather than as another item in the run of counts on the left."""
+        return Text()

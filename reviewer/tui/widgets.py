@@ -175,6 +175,30 @@ class PacTimer(Static):
 
     While a scan is actually running it steps aside and shows the phase, because
     that is the information that matters then.
+
+    It lives in the header, beside the clock. What it says is true of the run
+    rather than of any one tab, and it was previously wedged between the tabs
+    and the log where it read as belonging to whichever pane was above it.
+    """
+
+    #: Width the clock reserves at the right edge of the header. Docked
+    #: siblings both anchor to that edge rather than stacking, so this is
+    #: reserved by hand — asserted in the tests, since overlapping the clock is
+    #: not something a glance at the screen would necessarily catch.
+    CLOCK_WIDTH = 10
+
+    DEFAULT_CSS = """
+    PacTimer {
+        dock: right;
+        width: auto;
+        /* The clock's ten columns, plus a rule and a column of air either
+           side of it: the two were legible on their own and read as one
+           string together. */
+        margin-right: 13;
+        border-right: vkey $panel-lighten-2;
+        content-align: right middle;
+        padding-right: 1;
+    }
     """
 
     REFRESH_SECONDS = 0.5

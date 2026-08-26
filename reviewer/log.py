@@ -29,7 +29,7 @@ _TOKEN_PATTERNS = [
     re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]{20,}"),
 ]
 
-LOGGER_NAME = "pr-reviewer"
+LOGGER_NAME = "blinky"
 
 
 def redact(text: str) -> str:

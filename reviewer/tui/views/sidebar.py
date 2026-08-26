@@ -137,12 +137,18 @@ class SidebarHeader(Static):
         pass
 
     def show(self, *, collapsed: bool) -> None:
+        """One line either way: the arrow, then the title if there is room.
+
+        The word "hide" went: the arrow already says what clicking does, and
+        spending a second line on saying it again cost a repository row.
+        """
+        if collapsed:
+            self.update(prose.span(theme.EXPAND, theme.FAINT))
+            return
         self.update(
-            prose.span(f" {theme.EXPAND}", theme.FAINT)
-            if collapsed
-            else prose.join(
-                prose.line("REPOSITORIES", theme.MUTED),
-                prose.span(f" {theme.COLLAPSE} hide", theme.FAINT),
+            prose.join(
+                prose.span(f"{theme.COLLAPSE} ", theme.FAINT),
+                prose.span("REPOSITORIES", theme.MUTED),
             )
         )
 

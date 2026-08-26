@@ -23,7 +23,14 @@ Three tabs, and the underlined letter in each name is its key — `d`, `s`, `h` 
 working from anywhere.
 
 Everything fits one screen at any terminal size: the tables shrink to the space
-available rather than the window growing past the bottom. `l` hides the log pane
+available rather than the window growing past the bottom.
+
+What is true of the *run* sits in the header, next to the clock — the countdown
+to the next scan, or the phase and elapsed time while one is going. What is true
+of the *list* you are looking at sits under it, inside its column, with the
+divider running past to say so: how many rows, which page, and the filters at the
+right-hand end of the same line. Nothing describing a list runs under the detail
+pane beside it. `l` hides the log pane
 and gives its ten lines back to whichever table you are on, which is worth
 knowing on a short terminal. It keeps recording while hidden, so bringing it back
 shows what you missed.
@@ -39,7 +46,7 @@ month, so a change nobody is landing is visible without reading the number.
 
 A pull request being worked on shows a spinner and a running clock: `⠹ reviewing
 4m` on the board, `⠹ reviewing right now — 4m 12s` in the detail pane, and the
-elapsed time beside the phase on the Pac-Man line. A review is minutes of work,
+elapsed time beside the phase in the header. A review is minutes of work,
 and until it finishes the row would otherwise show the previous pass's verdict as
 though it were current.
 
@@ -111,7 +118,7 @@ turns the page** — `j` and the arrows carry on rather than stopping — and `[
 how many you are on, which is the thing an endless scroll cannot tell you.
 
 It lives in the same SQLite database as the rest of the state, under
-`~/.local/state/pr-reviewer/`, and outlives the pull requests it describes.
+`~/.local/state/blinky/`, and outlives the pull requests it describes.
 
 ### Keys
 
@@ -638,7 +645,7 @@ Every key is documented in the sample files themselves, in `$comment` fields tha
 are stripped on load, so the file you edit explains itself and there is no second
 copy to drift.
 
-State and logs go to `~/.local/state/pr-reviewer/`, deliberately outside the
+State and logs go to `~/.local/state/blinky/`, deliberately outside the
 checkout — they hold PR titles and, under `--debug`, diff content. Logs record
 repo, PR number, decision and token counts; diff and comment bodies are written
 only when you pass `--debug`.
@@ -663,7 +670,7 @@ only when you pass `--debug`.
   --lean              Plain scrolling log, no dashboard, no dependencies
   --tui               Dashboard + reviewer in one window (the default)
   --debug             Write full prompts and responses to the state dir
-  --state-dir PATH    Override ~/.local/state/pr-reviewer
+  --state-dir PATH    Override ~/.local/state/blinky
   --config-dir PATH   Override ./config
 ```
 

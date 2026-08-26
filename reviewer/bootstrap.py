@@ -213,7 +213,7 @@ def run(config_dir: Path, repo_root: Path) -> int:
         return 1
 
     _say()
-    _say("Setting up pr-reviewer. Nothing here overwrites a file that exists.")
+    _say("Setting up Blinky. Nothing here overwrites a file that exists.")
     _say()
     try:
         _say("1. Token")

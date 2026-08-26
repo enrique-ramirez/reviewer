@@ -30,15 +30,24 @@ RepoSidebar:focus { border-right: solid $accent; }
 /* Collapsed is a rail, not a disappearance: one glyph per repository, so the
    fact that there are others survives folding the panel away. */
 RepoSidebar.collapsed { width: 6; }
-RepoSidebar.collapsed SidebarHeader { height: 2; }
+/* Collapsed, the header is just the arrow — centred, so it lines up with the
+   rail of ghosts under it rather than hanging off the top. */
+RepoSidebar.collapsed SidebarHeader {
+    height: 3;
+    margin-bottom: 0;
+    content-align: center middle;
+    padding: 0;
+}
 RepoSidebar.collapsed RepoRow {
     height: 1;
     margin-bottom: 0;
 }
 
 SidebarHeader {
-    height: 3;
+    height: 1;
+    margin-bottom: 1;
     color: $text-muted;
+    content-align: left middle;
 }
 SidebarHeader:hover { background: $boost; }
 
@@ -63,10 +72,35 @@ TabPane {
 RecordView { height: 1fr; }
 RecordView > Horizontal { height: 1fr; }
 
-SyncedTable {
+/* The two columns of a tab. The divider belongs to the column rather than to
+   the table, so it runs past the status line underneath — which is what says
+   that line is about the list and not about the whole screen. */
+.listing {
     width: 3fr;
     height: 1fr;
     border-right: solid $panel-lighten-2;
+}
+.details {
+    width: 2fr;
+    height: 1fr;
+}
+
+/* The status line and the filters, on one row: counts at the left edge of the
+   list, controls at the right edge of it. */
+.underbar {
+    height: 1;
+    background: $panel;
+}
+/* Three equal slots. Equal is what makes the middle one's centre the bar's
+   centre — with an auto-width slot on either side it would drift with whatever
+   they happened to contain. */
+.underbar StatusBar.counts { width: 1fr; }
+.underbar StatusBar.pager  { width: 1fr; content-align: center middle; }
+.underbar #history_filters { width: 1fr; align-horizontal: right; }
+
+SyncedTable {
+    width: 1fr;
+    height: 1fr;
 }
 SyncedTable > .datatable--cursor {
     background: $accent;
@@ -74,7 +108,8 @@ SyncedTable > .datatable--cursor {
 }
 
 DetailPane {
-    width: 2fr;
+    width: 1fr;
+    height: 1fr;
     padding: 0 1;
 }
 
@@ -109,13 +144,20 @@ PacTimer {
    nothing — page size follows the height that is left. */
 #history_filters {
     height: 1;
-    background: $panel;
-    padding: 0 1;
+    padding: 0;
+    /* Equal thirds put the page count on the bar's centre, but a third of a
+       narrow column cannot hold a date control. The floor keeps the control
+       whole and lets the centring drift instead — a page count a few columns
+       off centre is a smaller loss than a clipped filter. */
+    min-width: 20;
 }
+/* Label and control together have to fit one third of the list column, since
+   equal outer thirds are what put the page count on the bar's centre. Sized
+   for the longest range plus its arrow. */
 #date_label {
     color: $text-muted;
     padding: 0 1 0 0;
 }
 #date_filter {
-    width: 16;
+    width: 14;
 }

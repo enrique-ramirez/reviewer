@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from .formatting import DAY
+from .models import short_name
 
 ALL_REPOSITORIES = "All repositories"
 
@@ -55,6 +56,22 @@ class Session:
     @property
     def whole_estate(self) -> bool:
         return self.chosen_repo is None
+
+    @property
+    def scope_label(self) -> str:
+        """What the title calls what you are looking at.
+
+        Without the owner, which every repository in a run tends to share and
+        which the sidebar spells out anyway. A single-repository run says that
+        repository rather than "All repositories", because there is no "all"
+        to distinguish it from.
+        """
+        chosen = self.chosen_repo
+        if chosen:
+            return short_name(chosen)
+        if not self.multi_repo:
+            return short_name(self.repos[0]) if self.repos else ""
+        return ALL_REPOSITORIES
 
     @property
     def window_label(self) -> str:

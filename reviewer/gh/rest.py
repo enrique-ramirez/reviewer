@@ -22,7 +22,7 @@ from typing import Any, Iterator
 from .. import log
 from ..state import Store
 
-USER_AGENT = "pr-reviewer/0.1 (+https://github.com)"
+USER_AGENT = "blinky/0.1 (+https://github.com)"
 ACCEPT = "application/vnd.github+json"
 API_VERSION = "2022-11-28"
 

@@ -84,7 +84,7 @@ def _pid_alive(pid: int) -> bool:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="pr-reviewer",
+        prog="blinky",
         description="Review pull requests on a schedule, from your own machine.",
     )
     parser.add_argument("--once", action="store_true", help="one pass, then exit")
@@ -515,7 +515,11 @@ def main(argv: list[str] | None = None) -> int:
 
     state_dir = args.state_dir or state.default_state_dir()
     state_dir = Path(state_dir).expanduser()
+    moved_from = state.adopt_legacy_state_dir(state_dir)
     logger = log.setup("INFO", state_dir / "reviewer.log")
+    if moved_from is not None:
+        logger.info("state moved from %s to %s (the project was renamed)",
+                    moved_from, state_dir)
 
     # Before anything reads config: this is the command that writes it.
     if args.init:

@@ -13,7 +13,11 @@ from typing import Any
 from reviewer.state import Store
 from reviewer.tui import Runtime
 from reviewer.tui.app import Dashboard
+from textual.widgets import TabbedContent
+
 from reviewer.tui.logs import LogRelay
+from reviewer.tui.views.sidebar import RepoRow
+from reviewer.tui.widgets import PacTimer
 from reviewer.tui.views import board
 from reviewer.tui.views.board import BoardView
 from reviewer.tui.views.merges import HistoryView, SummaryView
@@ -350,7 +354,9 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
     async def test_the_status_bars_say_what_each_tab_is_showing(self) -> None:
         app = self._app()
         async with app.run_test():
-            self.assertEqual(len(app.query(StatusBar)), 3)
+            # Two per tab: the counts on the left and the page count centred.
+            self.assertEqual(len(app.query("StatusBar.counts")), 3)
+            self.assertEqual(len(app.query("StatusBar.pager")), 3)
             for view in (BoardView, SummaryView, HistoryView):
                 self.assertEqual(len(app.query(view)), 1)
             self.assertIn("merged", app.history.status_text().plain)
@@ -765,3 +771,391 @@ class Footer(unittest.IsolatedAsyncioTestCase):
             board = self._shown(app)
             self.assertNotIn("[", board, "paging means nothing on the board")
             self.assertNotIn("t", board)
+
+
+class Layout(unittest.IsolatedAsyncioTestCase):
+    """Where things sit, which is the part a passing test suite kept missing."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        _seed(self.store, self.now)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self, status: dict[str, Any] | None = None) -> Dashboard:
+        state = status or {"phase": "waiting", "remaining": 664.0, "total": 900.0}
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=lambda: dict(state),
+                started_at=self.now,
+            )
+        )
+
+    async def test_the_run_status_sits_in_the_header_beside_the_clock(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            pac = app.query_one(PacTimer).region
+            clock = app.query_one("HeaderClock").region
+            self.assertEqual(pac.y, 0, "it belongs to the run, not to a tab")
+            self.assertLess(pac.x, clock.x, "the clock keeps the corner")
+
+    async def test_it_never_runs_under_the_clock(self) -> None:
+        # Two widgets docked right both anchor to the edge rather than
+        # stacking, so the clock's width is reserved by hand. If that reservation
+        # ever drifts, the overlap is silent.
+        for width in (80, 100, 140, 200):
+            for status in (
+                {"phase": "waiting", "remaining": 664.0, "total": 900.0},
+                {"phase": "scanning 4/6 — #1792", "remaining": None, "total": None},
+            ):
+                with self.subTest(width=width, phase=status["phase"]):
+                    app = self._app(status)
+                    async with app.run_test(size=(width, 30)) as pilot:
+                        await pilot.pause()
+                        pac = app.query_one(PacTimer).region
+                        clock = app.query_one("HeaderClock").region
+                        self.assertLessEqual(pac.right, clock.x)
+
+    async def test_the_status_line_belongs_to_the_list_not_the_screen(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.press("h")
+            await pilot.pause()
+            await pilot.pause()
+            listing = app.history.query_one(".listing").region
+            details = app.history.query_one(".details").region
+            bar = app.history.query_one(".underbar").region
+            self.assertEqual(bar.x, listing.x)
+            self.assertLessEqual(bar.right, details.x, "it must not run under the detail")
+            self.assertEqual(bar.height, 1)
+
+    async def test_the_filters_sit_at_the_far_end_of_that_line(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.press("h")
+            await pilot.pause()
+            await pilot.pause()
+            bar = app.history.query_one(".underbar").region
+            status = app.history.status_bar.region
+            filters = app.history.query_one("#history_filters").region
+            self.assertEqual(status.x, bar.x, "counts at the left edge")
+            self.assertEqual(filters.right, bar.right, "controls at the right edge")
+            self.assertEqual(status.y, filters.y, "on one line, not two")
+
+
+class Sidebar(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        _seed(self.store, self.now)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self) -> Dashboard:
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+            )
+        )
+
+    async def test_the_title_is_one_line_with_the_arrow_in_front(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            header = app.query_one("SidebarHeader")
+            text = header.render().plain
+            self.assertTrue(text.strip().endswith("REPOSITORIES"))
+            self.assertNotIn("hide", text, "the arrow already says what it does")
+            self.assertEqual(header.region.height, 1)
+
+    async def test_collapsed_the_arrow_lines_up_with_the_rail(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("E")
+            await pilot.pause()
+            await pilot.pause()
+            header = app.query_one("SidebarHeader")
+            row = app.query(RepoRow)[0]
+
+            def glyph_column(widget) -> int:
+                """The terminal column the widget's last glyph lands in.
+
+                The last one, not the first: a chosen rail row leads with a
+                cursor bar, so measuring from the left would compare the bar
+                against the arrow instead of the ghost against the arrow.
+                """
+                text = widget.render().plain.rstrip()
+                index = max(0, len(text) - 1)
+                if widget.styles.content_align_horizontal == "center":
+                    index += (widget.region.width - len(text)) // 2
+                return widget.region.x + index
+
+            self.assertEqual(glyph_column(header), glyph_column(row))
+            # And the same for a row that is not the selected one, which is
+            # drawn without the leading cursor bar.
+            self.assertEqual(glyph_column(header), glyph_column(app.query(RepoRow)[1]))
+
+
+class UnderBar(unittest.IsolatedAsyncioTestCase):
+    """The line under the list: counts left, page centred, filters right."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        for i in range(60):
+            self.store.record_merged(
+                {
+                    "repo": "acme/widgets",
+                    "pr_number": 900 - i,
+                    "title": "Ship it",
+                    "author": "ada",
+                    "url": "https://example.invalid",
+                    "merged_at": self.now - i * 3600,
+                    "recorded_at": self.now,
+                }
+            )
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self) -> Dashboard:
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+            )
+        )
+
+    async def _history(self, pilot) -> None:
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.pause()
+
+    async def test_the_page_count_sits_on_the_centre_of_the_bar(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 32)) as pilot:
+            await self._history(pilot)
+            bar = app.history.query_one(".underbar").region
+            pager = app.history.pager_bar.region
+            self.assertEqual(
+                (pager.x + pager.right) // 2, (bar.x + bar.right) // 2
+            )
+            self.assertIn("page", app.history.pager_text().plain)
+
+    async def test_it_is_the_only_place_the_page_count_appears(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 32)) as pilot:
+            await self._history(pilot)
+            self.assertNotIn("page", app.history.status_text().plain)
+
+    async def test_the_scope_is_left_to_the_sidebar(self) -> None:
+        # It is shown there, highlighted. Repeating it made the busiest line on
+        # the screen carry the least new information.
+        app = self._app()
+        async with app.run_test(size=(140, 32)) as pilot:
+            await self._history(pilot)
+            counts = app.history.status_text().plain
+            self.assertIn("merged", counts)
+            self.assertNotIn("all repos", counts)
+
+    async def test_the_filters_stay_inside_the_bar_at_any_width(self) -> None:
+        # Equal thirds is what centres the page count, but a third of a narrow
+        # column cannot hold a date control; the floor must win over the centring.
+        for width in (100, 120, 140, 200):
+            with self.subTest(width=width):
+                app = self._app()
+                async with app.run_test(size=(width, 32)) as pilot:
+                    await self._history(pilot)
+                    bar = app.history.query_one(".underbar").region
+                    self.assertLessEqual(app.history.dates.region.right, bar.right)
+
+    async def test_a_single_page_says_nothing(self) -> None:
+        # Tall enough to hold every row, so there is no page to be on.
+        app = self._app()
+        async with app.run_test(size=(140, 90)) as pilot:
+            await self._history(pilot)
+            self.assertEqual(app.history.page.pages, 1)
+            self.assertEqual(app.history.pager_text().plain, "")
+
+    async def test_the_board_has_no_page_count_to_show(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 32)) as pilot:
+            await pilot.pause()
+            self.assertEqual(app.board.pager_text().plain, "")
+
+
+class HeaderSpacing(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        _seed(self.store, self.now)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    async def test_the_countdown_is_not_flush_against_the_clock(self) -> None:
+        app = Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=lambda: {"phase": "waiting", "remaining": 664.0, "total": 900.0},
+                started_at=self.now,
+            )
+        )
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            pac = app.query_one(PacTimer).region
+            clock = app.query_one("HeaderClock").region
+            self.assertGreaterEqual(clock.x - pac.right, 2, "they read as one string")
+
+    async def test_the_sidebar_title_has_room_to_breathe(self) -> None:
+        app = Dashboard(
+            Runtime(
+                store=self.store,
+                repos=REPOS,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+            )
+        )
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            header = app.query_one("SidebarHeader").region
+            first = app.query(RepoRow)[0].region
+            self.assertGreaterEqual(first.y - (header.y + header.height), 1)
+
+
+class Naming(unittest.IsolatedAsyncioTestCase):
+    """The title, and the count that moved onto the tab it is true of."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.now = time.time()
+        self.store = Store(Path(self._tmp.name))
+        _seed(self.store, self.now)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _app(self, repos: tuple[str, ...] = REPOS) -> Dashboard:
+        return Dashboard(
+            Runtime(
+                store=self.store,
+                repos=repos,
+                relay=LogRelay(),
+                stop=threading.Event(),
+                status=dict,
+                started_at=self.now,
+            )
+        )
+
+    async def test_the_title_names_the_run_and_its_scope(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            self.assertEqual(app.title, "ᗣ Blinky: All repositories")
+
+    async def test_it_follows_the_sidebar(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            app.session = app.session.with_repo(1)
+            app.reload()
+            await pilot.pause()
+            # The owner is dropped: every repo in a run tends to share it, and
+            # the sidebar spells it out anyway.
+            self.assertEqual(app.title, "ᗣ Blinky: widgets")
+
+    async def test_one_repository_is_named_rather_than_called_all_of_them(self) -> None:
+        app = self._app(repos=("acme/widgets",))
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            self.assertEqual(app.title, "ᗣ Blinky: widgets")
+
+    async def test_the_open_count_rides_on_the_dashboard_tab(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            tabs = app.query_one(TabbedContent)
+            self.assertEqual(str(tabs.get_tab("dashboard").label), "Dashboard (2)")
+            # And nowhere else: a title saying "2 open" while you read History
+            # answers a question nobody asked.
+            self.assertNotIn("open", app.title)
+            self.assertNotIn("open", app.sub_title)
+
+    async def test_the_other_tabs_are_left_unnumbered(self) -> None:
+        app = self._app()
+        async with app.run_test(size=(140, 30)) as pilot:
+            await pilot.pause()
+            tabs = app.query_one(TabbedContent)
+            self.assertEqual(str(tabs.get_tab("summary").label), "Summary")
+            self.assertEqual(str(tabs.get_tab("history").label), "History")
+
+
+class Renamed(unittest.TestCase):
+    """A rename must not orphan what the old name wrote."""
+
+    def test_comments_already_on_github_are_still_recognised(self) -> None:
+        from reviewer import render
+
+        self.assertTrue(render.is_ours(render.marker("abc123def456")))
+        self.assertTrue(render.is_ours("<!-- pr-reviewer:v1:abc123def456 -->"))
+        self.assertFalse(render.is_ours("someone else's comment"))
+
+    def test_worktrees_left_by_an_older_build_are_still_pruned(self) -> None:
+        from reviewer import worktree
+
+        self.assertTrue(worktree._is_ours(Path("/tmp/blinky-42-xyz")))
+        self.assertTrue(worktree._is_ours(Path("/tmp/pr-reviewer-42-xyz")))
+        self.assertFalse(worktree._is_ours(Path("/tmp/somebody-elses-worktree")))
+
+    def test_the_history_is_carried_to_the_renamed_directory(self) -> None:
+        from reviewer import state as state_mod
+
+        root = Path(tempfile.mkdtemp())
+        legacy = root / state_mod.LEGACY_STATE_DIR_NAME
+        legacy.mkdir()
+        (legacy / "state.sqlite3").write_text("history", encoding="utf-8")
+
+        new = root / state_mod.STATE_DIR_NAME
+        self.assertEqual(state_mod.adopt_legacy_state_dir(new), legacy)
+        self.assertEqual((new / "state.sqlite3").read_text(encoding="utf-8"), "history")
+        # Once only, and never over the top of something already there.
+        self.assertIsNone(state_mod.adopt_legacy_state_dir(new))
+
+    def test_a_directory_the_user_named_is_never_moved(self) -> None:
+        from reviewer import state as state_mod
+
+        root = Path(tempfile.mkdtemp())
+        (root / state_mod.LEGACY_STATE_DIR_NAME).mkdir()
+        self.assertIsNone(state_mod.adopt_legacy_state_dir(root / "somewhere-else"))

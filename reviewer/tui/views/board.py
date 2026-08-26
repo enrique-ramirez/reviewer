@@ -56,10 +56,17 @@ def longest_running(pull_requests: Sequence[PullRequest], now: float) -> float:
 
 
 def subtitle(pull_requests: Sequence[PullRequest], session: Session) -> str:
+    """What the header adds after the title.
+
+    Not how many are open — that is on the Dashboard tab, which is the thing it
+    is true of. What is left is the part a title should carry: whether any of
+    them want you.
+    """
     flagged = sum(1 for pr in pull_requests if status.attention(pr))
-    waiting = f" — {flagged} need you" if flagged else ""
-    filtered = "  [filtered]" if session.only_attention else ""
-    return f"{len(pull_requests)} open{waiting}{filtered}"
+    parts = [f"{flagged} need you"] if flagged else []
+    if session.only_attention:
+        parts.append("filtered")
+    return " · ".join(parts)
 
 
 def work_in_flight(pull_requests: Sequence[PullRequest], now: float) -> tuple[Text, ...]:
