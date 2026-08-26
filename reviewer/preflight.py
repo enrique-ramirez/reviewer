@@ -151,8 +151,10 @@ def _providers_in_use(
 
     if summaries:
         note_if_different(global_cfg.summary_provider_for(), "merge summaries")
+    note_if_different(global_cfg.thread_provider_for(), "thread replies")
     for repo in repos:
         note_if_different(global_cfg.provider_for(repo), repo.repo)
+        note_if_different(global_cfg.thread_provider_for(repo), repo.repo)
         if summaries:
             note_if_different(global_cfg.summary_provider_for(repo), repo.repo)
     return found

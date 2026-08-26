@@ -327,6 +327,34 @@ class Choosing(unittest.TestCase):
         repo = self.repo(global_cfg, model={"provider": "gemini"})
         self.assertEqual(global_cfg.summary_provider_for(repo)["name"], "gemini")
 
+    def test_thread_replies_default_to_whatever_reviews(self):
+        global_cfg = self.load(providers={"claude": {"model": "claude-opus-5"}})
+        repo = self.repo(global_cfg)
+        self.assertEqual(global_cfg.thread_provider_for(repo)["model"], "claude-opus-5")
+
+    def test_thread_replies_can_drop_a_tier_on_their_own(self):
+        # The point of the block: plan on the big model, follow up on the small
+        # one, without touching what reviews.
+        global_cfg = self.load(
+            providers={"claude": {"model": "claude-opus-5"}},
+            thread_reply={"model": "claude-sonnet-5"},
+        )
+        repo = self.repo(global_cfg)
+        self.assertEqual(global_cfg.provider_for(repo)["model"], "claude-opus-5")
+        self.assertEqual(global_cfg.thread_provider_for(repo)["model"], "claude-sonnet-5")
+
+    def test_thread_replies_keep_their_tools_unlike_summaries(self):
+        # Checking a claim against the code is most of the point of replying.
+        global_cfg = self.load(thread_reply={"model": "claude-sonnet-5"})
+        self.assertEqual(
+            global_cfg.thread_provider_for()["allowed_tools"], ["Read", "Glob", "Grep"]
+        )
+        self.assertEqual(global_cfg.summary_provider_for()["allowed_tools"], [])
+
+    def test_a_thread_timeout_of_null_inherits_the_provider_s_own(self):
+        global_cfg = self.load(providers={"claude": {"timeout_seconds": 600}})
+        self.assertEqual(global_cfg.thread_provider_for()["timeout_seconds"], 600)
+
     def test_a_summary_provider_drops_a_model_meant_for_another_one(self):
         # "gpt-5.1-codex" means nothing to claude, and passing it on would fail
         # the call rather than fall back.
@@ -371,6 +399,11 @@ class Rejected(unittest.TestCase):
     def test_a_summary_provider_naming_nothing(self):
         with self.assertRaises(ConfigError):
             self.load(merge_summary={"provider": "ollama"})
+
+    def test_a_thread_reply_provider_naming_nothing(self):
+        with self.assertRaises(ConfigError) as caught:
+            self.load(thread_reply={"provider": "ollama"})
+        self.assertIn("thread_reply.provider", str(caught.exception))
 
     def test_a_repo_naming_a_provider_that_is_not_configured(self):
         global_cfg = self.load()

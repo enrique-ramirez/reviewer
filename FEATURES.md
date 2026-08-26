@@ -422,9 +422,30 @@ leaves the command, tools and timeout alone:
 ```
 
 A `null` means *inherit*, not *unset*, which is what lets the sample config ship
-the block with every key blank. Merge summaries follow whatever the repo chose,
-unless `merge_summary.provider` names one of its own — worth doing if you keep a
-cheaper CLI around, since summarising is not judging.
+the block with every key blank.
+
+### Per kind of call
+
+Not every call is a review. Two of them are much smaller jobs, and each has its
+own block in `global.json` that layers over whatever provider the repo resolved
+to — plan on the expensive model, follow up on a cheap one:
+
+| Block | What it is | Sends a diff? | Tools? |
+|---|---|---|---|
+| *(the review)* | The full pass over a PR | Yes, the whole bundle | Yes |
+| `thread_reply` | Answering one thread that has a new reply | **No** — just the conversation | Yes |
+| `merge_summary` | The one-line "what changed" on the Summary tab | No | **No** |
+
+```json
+"thread_reply":  { "model": "claude-sonnet-5" },
+"merge_summary": { "model": "claude-haiku-4-5-20251001" }
+```
+
+`thread_reply` keeps its tools because checking whether a claim holds up against
+the code is most of the point of answering. `merge_summary` drops them because it
+has nothing to look at. Setting `provider` on either sends that kind of call to a
+different CLI entirely, and drops any repo-level model pin along with it — a
+model name pinned for one provider means nothing to another.
 
 ### What every provider does the same way
 
@@ -615,6 +636,40 @@ terminal to draw a dashboard on.
 A dry run writes to a separate database, so repeating one is free and the live
 state is untouched. A PID lockfile means a tick arriving while the previous one
 is still working is skipped rather than queued, so a slow review cannot pile up.
+
+### What a dry run tells you about cost
+
+Every model call in a dry run logs what its prompt was made of, largest section
+first — the place to find out whether `max_total_lines` or `personality/` is what
+is actually costing you:
+
+```
+                                          chars  est. tok
+  system
+    repository documentation              9,841     2,660
+    following the local shape             4,013     1,085
+    voice — the comments people read      3,956     1,069
+  user
+    diff                                 36,009     9,732
+    pr description                          899       243
+  ───────────────────────────────────────────────────────
+  sent by this tool                      67,396    18,215
+  counted in by the provider                       41,921
+  ↳ of which CLI overhead                          23,706   fixed; not editable here
+  ↳ of which read from cache                       20,902   billed at a fraction
+  out                                               1,130
+```
+
+Read it in three parts. **Sections** are estimated from character counts — no
+tokeniser ships with the standard library — so treat them as ±15% and as a way to
+compare rows against each other, which is what tuning needs. **CLI overhead** is
+the coding-agent CLI's own system prompt and tool definitions; it is real, it is
+usually the second-largest line, and nothing in this repository can change it.
+**Read from cache** is the one to protect: the system prompt is identical across
+every PR in a repo, so it caches and is billed at a fraction. Anything that makes
+the system prompt vary per pull request would quietly cost you that.
+
+With `--debug` the same table is written to `tokens-<axis>.txt` in the state dir.
 
 ## Roadmap
 

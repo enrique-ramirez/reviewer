@@ -106,7 +106,7 @@ def handle(
 
     try:
         result = model.run(
-            global_cfg.provider_for(cfg),
+            global_cfg.thread_provider_for(cfg),
             system_prompt=system,
             user_prompt=user,
             add_dir=checkout_path,

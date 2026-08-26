@@ -128,6 +128,28 @@
     "$comment_max_tries": "After this many failed attempts the description falls back to our own review summary, so a missing CLI cannot buy a failed subprocess every tick forever."
   },
 
+  "thread_reply": {
+    "$comment": [
+      "Answering one review thread that has a reply you have not addressed.",
+      "A much smaller job than the review it came from: no diff is sent at all,",
+      "just the conversation, and the question is whether a claim holds up rather",
+      "than what is wrong with the change. A cheaper model is usually the right",
+      "call here — plan on the big one, follow up on the small one.",
+      "",
+      "Tools are kept, unlike merge_summary: checking a claim against the code is",
+      "most of the point of answering at all."
+    ],
+
+    "provider": null,
+    "$comment_provider": "null means replies run on whatever provider reviews that repository.",
+
+    "model": null,
+    "$comment_model": "null reuses the provider's model. This is the cheapest place to drop a tier.",
+
+    "timeout_seconds": null,
+    "$comment_timeout_seconds": "null inherits the provider's own timeout."
+  },
+
   "notifications": {
     "enabled": true,
     "command": "osascript",

@@ -76,6 +76,11 @@ GLOBAL_DEFAULTS: dict[str, Any] = {
         "max_per_tick": 5,
         "max_tries": 3,
     },
+    "thread_reply": {
+        "provider": None,
+        "model": None,
+        "timeout_seconds": None,
+    },
     "notifications": {"enabled": True, "command": "osascript"},
     "logging": {"level": "INFO"},
 }
@@ -292,6 +297,7 @@ class GlobalConfig:
     provider: str
     providers: dict[str, dict[str, Any]]
     merge_summary: dict[str, Any]
+    thread_reply: dict[str, Any]
     notifications: dict[str, Any]
     logging: dict[str, Any]
     api_url: str
@@ -313,12 +319,13 @@ class GlobalConfig:
         default = str(data["provider"])
         checked = _check_providers(data["providers"], default, path)
 
-        summary_provider = data["merge_summary"].get("provider")
-        if summary_provider and summary_provider not in checked:
-            raise ConfigError(
-                f"{path}: merge_summary.provider is {summary_provider!r}, which "
-                f"is not in \"providers\" ({', '.join(sorted(checked))})."
-            )
+        for block in ("merge_summary", "thread_reply"):
+            named = data[block].get("provider")
+            if named and named not in checked:
+                raise ConfigError(
+                    f"{path}: {block}.provider is {named!r}, which is not in "
+                    f"\"providers\" ({', '.join(sorted(checked))})."
+                )
 
         return cls(
             tick_seconds=int(data["tick_seconds"]),
@@ -327,6 +334,7 @@ class GlobalConfig:
             provider=default,
             providers=checked,
             merge_summary=data["merge_summary"],
+            thread_reply=data["thread_reply"],
             notifications=data["notifications"],
             logging=data["logging"],
             api_url=os.environ.get("GITHUB_API_URL", DEFAULT_API_URL).rstrip("/"),
@@ -359,34 +367,64 @@ class GlobalConfig:
         return resolved
 
     def provider_for(self, repo: "RepoConfig | None" = None) -> dict[str, Any]:
-        """What a review of ``repo`` should run against."""
+        """What a full review of ``repo`` should run against."""
         return self.resolve_provider(repo.model if repo else None)
 
-    def summary_provider_for(self, repo: "RepoConfig | None" = None) -> dict[str, Any]:
-        """What the one-line merge summary should run against.
+    def _for_purpose(
+        self,
+        settings: dict[str, Any],
+        repo: "RepoConfig | None",
+        *,
+        drop_tools: bool = False,
+        timeout_default: int | None = None,
+    ) -> dict[str, Any]:
+        """A provider for one kind of call, cheaper than a full review.
 
         Starts from whatever reviews that repo — so a repo that moved provider
-        moves its summaries too — then applies ``merge_summary``. Tools are
-        dropped and no directory is added, so the call has nothing to read and
-        nothing to reach. The timeout is much shorter than a review's: this is a
-        small prompt, and one that hangs should be abandoned rather than holding
-        up the tick behind it.
+        moves its lesser calls with it — then layers the purpose's own block on
+        top.
         """
-        settings = self.merge_summary
         overrides = dict(repo.model) if repo else {}
 
         if settings.get("provider"):
-            # An explicit "summaries go here" outranks the repo's choice. Its
-            # model name goes with it: a model pinned for one provider means
-            # nothing to another, and passing it on would fail the call.
+            # An explicit "this kind of call goes here" outranks the repo's
+            # choice. Its model name goes with it: a model pinned for one
+            # provider means nothing to another, and passing it on would fail
+            # the call rather than fall back.
             overrides["provider"] = settings["provider"]
             overrides.pop("model", None)
         if settings.get("model"):
             overrides["model"] = settings["model"]
+        if drop_tools:
+            overrides["allowed_tools"] = []
 
-        overrides["allowed_tools"] = []
-        overrides["timeout_seconds"] = int(settings.get("timeout_seconds") or 180)
+        timeout = settings.get("timeout_seconds") or timeout_default
+        if timeout:
+            overrides["timeout_seconds"] = int(timeout)
         return self.resolve_provider(overrides)
+
+    def summary_provider_for(self, repo: "RepoConfig | None" = None) -> dict[str, Any]:
+        """What the one-line merge summary should run against.
+
+        Tools are dropped and no directory is added, so the call has nothing to
+        read and nothing to reach. The timeout is much shorter than a review's:
+        this is a small prompt, and one that hangs should be abandoned rather
+        than holding up the tick behind it.
+        """
+        return self._for_purpose(
+            self.merge_summary, repo, drop_tools=True, timeout_default=180
+        )
+
+    def thread_provider_for(self, repo: "RepoConfig | None" = None) -> dict[str, Any]:
+        """What answering one review thread should run against.
+
+        Worth separating from the review it came from, because it is a much
+        smaller job: no diff is sent at all, just the conversation, and the
+        question is whether a reply holds up rather than what is wrong with the
+        change. Tools are kept — checking a claim against the code is most of
+        the point — so this is not the tool-less job a merge summary is.
+        """
+        return self._for_purpose(self.thread_reply, repo)
 
 
 @dataclass

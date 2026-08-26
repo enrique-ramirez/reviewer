@@ -26,6 +26,7 @@ from . import (
     render,
     summarize,
     threads,
+    tokens,
     worktree,
 )
 from .config import DEFAULT_CONTEXT_PATHS, GlobalConfig, RepoConfig
@@ -917,6 +918,21 @@ class Reviewer:
             number,
             _format_usage(result.usage, result.duration_seconds),
         )
+
+        if self.dry_run:
+            # A rehearsal is where prompt sizes get tuned, so this is where the
+            # breakdown belongs. Kept out of live runs: it is a wall of numbers
+            # nobody reads when the thing is working.
+            breakdown = tokens.report(system, user, result.usage)
+            log.get().info(
+                "[dry-run] %s#%s prompt composition (%s)\n%s",
+                self.cfg.repo,
+                number,
+                tag,
+                breakdown,
+            )
+            self.debug.write(self.cfg.repo, number, f"tokens-{tag}.txt", breakdown)
+
         return result.payload
 
     def _log_review_event(
