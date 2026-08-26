@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import log, model, prompt, render
+from . import log, model, prompt, render, state
 from .config import GlobalConfig, RepoConfig
 from .gh import GraphQLClient, RestClient
 from .gh.graphql import PRSnapshot, ReviewThread
@@ -110,6 +110,8 @@ def handle(
             system_prompt=system,
             user_prompt=user,
             add_dir=checkout_path,
+            label=f"{cfg.repo}#{snapshot.number}",
+            on_progress=state.heartbeat(store, cfg.repo, snapshot.number),
         )
     except model.ModelError as exc:
         log.get().error("thread check failed on #%s: %s", snapshot.number, exc)

@@ -393,8 +393,8 @@ def run(global_cfg: GlobalConfig, cfg: RepoConfig, pr_number: int | None) -> int
         print('      "gates": { "ci_source": "commit_statuses" }')
     else:
         print("  No CI signal is reachable with this token.")
-        print("  Fine-grained tokens need the 'Checks' permission for check runs,")
-        print("  and it is not offered on every account. Two ways forward:")
+        print("  Check runs need the 'Checks' permission, which GitHub offers on")
+        print("  GitHub Apps and not on fine-grained tokens. Two ways forward:")
         print()
         print("    1. Drop the CI gate. In")
         print(f"       config/repos/{cfg.source_file.name}, set")

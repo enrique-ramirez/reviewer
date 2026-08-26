@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import log, providers
+from . import clock, log, providers
 
 FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
@@ -50,19 +50,27 @@ class ModelError(RuntimeError):
 # a daemon thread being abandoned at interpreter exit does nothing to a child
 # process it started — that child is reparented and runs to completion, paying
 # for a review whose result nobody is left to post.
-_live: set[subprocess.Popen] = set()
+#
+# Labelled ``repo#number`` so the dashboard can stop one of them by name. A
+# review is minutes of work and several dollars of quota, so "stop that one"
+# wants to be a different gesture from "stop everything".
+_live: dict[subprocess.Popen, str] = {}
 _live_lock = threading.Lock()
 _cancelled = threading.Event()
+# Labels cancelled by hand, so the failure that follows can say so rather than
+# reading as a crash. Drained by whichever call notices it, since the label is
+# free to be reused by the next tick.
+_cancelled_labels: set[str] = set()
 
 
-def _register(proc: subprocess.Popen) -> None:
+def _register(proc: subprocess.Popen, label: str) -> None:
     with _live_lock:
-        _live.add(proc)
+        _live[proc] = label
 
 
 def _forget(proc: subprocess.Popen) -> None:
     with _live_lock:
-        _live.discard(proc)
+        _live.pop(proc, None)
 
 
 def stop_process(proc: subprocess.Popen, grace: float = 5.0) -> None:
@@ -117,6 +125,36 @@ def terminate_all(grace: float = 5.0) -> int:
     return len(live)
 
 
+def cancel(label: str, grace: float = 5.0) -> int:
+    """Stop the calls running under one label. Returns how many there were.
+
+    For "stop reviewing this one" from the dashboard, as against the quit path's
+    "stop everything". The label is recorded before the process is signalled so
+    that the ``ModelError`` the call is about to raise can be phrased as a
+    cancellation rather than as the crash it would otherwise look like.
+    """
+    with _live_lock:
+        matching = [proc for proc, name in _live.items() if name == label]
+        if matching:
+            _cancelled_labels.add(label)
+    for proc in matching:
+        stop_process(proc, grace)
+    return len(matching)
+
+
+def was_cancelled(label: str) -> bool:
+    """Whether ``label`` was cancelled by hand, clearing the mark as it reads.
+
+    Cleared on read because the label is a pull request, and the next tick will
+    happily use it again for a call nobody asked to stop.
+    """
+    with _live_lock:
+        if label in _cancelled_labels:
+            _cancelled_labels.discard(label)
+            return True
+        return False
+
+
 def live_count() -> int:
     """Model calls running right now, across every thread.
 
@@ -141,6 +179,138 @@ class ModelResult:
     duration_seconds: float
     provider: str = ""
     model: str = ""
+
+
+@dataclass
+class Progress:
+    """What a call can say about itself while it is still running.
+
+    Handed to ``on_progress`` every few seconds so the caller can record a
+    heartbeat. ``elapsed`` is wall-clock because it is for a person to read;
+    ``silent_for`` is awake-only because it is the wedge signal. See ``clock``.
+    """
+
+    #: Wall-clock seconds since the call started, sleep included.
+    elapsed: float
+    #: How many of those the machine spent asleep.
+    slept: float
+    #: Awake seconds since the child last printed anything.
+    silent_for: float
+    #: Whatever the provider could say about where it has got to, or "".
+    note: str = ""
+
+
+#: How often a running call reports in. Short enough that the dashboard's
+#: spinner is backed by something real, long enough to be free.
+BEAT_SECONDS = 5.0
+
+
+def _pump(
+    proc: subprocess.Popen,
+    *,
+    stdin_text: str,
+    deadline: clock.Deadline,
+    adapter: providers.Adapter,
+    on_progress: Any = None,
+) -> tuple[str, str]:
+    """Feed the child its prompt and collect its output, reporting as it goes.
+
+    Three threads rather than ``communicate()``. One writes, because a review
+    bundle is tens of kilobytes — larger than a pipe buffer — and writing it
+    inline would deadlock against a child that has not started reading yet. One
+    each for stdout and stderr, so that *a line arriving* is an event this can
+    see rather than something discovered at EOF.
+
+    That last part is the whole reason ``communicate()`` is not good enough here.
+    It reads to EOF, so for the length of a call it can report exactly nothing,
+    and "nothing" is precisely the state that needs telling apart from a hang.
+    A provider that streams (see ``Adapter.progress``) turns that into a running
+    account of where the review has got to.
+    """
+    out: list[str] = []
+    err: list[str] = []
+    silence = clock.Silence()
+    note = ""
+
+    def write() -> None:
+        try:
+            if proc.stdin is not None:
+                proc.stdin.write(stdin_text)
+                proc.stdin.close()
+        except (BrokenPipeError, OSError, ValueError):
+            # The child died before reading its prompt. Its exit code is the
+            # better error, and it is already on its way to the caller.
+            pass
+
+    def drain(stream: Any, sink: list[str], watch: bool) -> None:
+        nonlocal note
+        try:
+            for line in stream:
+                sink.append(line)
+                silence.beat()
+                if not watch:
+                    continue
+                try:
+                    found = adapter.progress(line)
+                except Exception:  # noqa: BLE001 - a progress note is never worth a review
+                    found = None
+                if found:
+                    note = found
+        except (OSError, ValueError):
+            pass
+        finally:
+            try:
+                stream.close()
+            except (OSError, ValueError):
+                pass
+
+    workers = [
+        threading.Thread(target=write, name="model-stdin", daemon=True),
+        threading.Thread(
+            target=drain, args=(proc.stdout, out, True), name="model-stdout", daemon=True
+        ),
+        threading.Thread(
+            target=drain, args=(proc.stderr, err, False), name="model-stderr", daemon=True
+        ),
+    ]
+    for worker in workers:
+        worker.start()
+
+    while True:
+        try:
+            proc.wait(timeout=BEAT_SECONDS)
+            break
+        except subprocess.TimeoutExpired:
+            pass
+
+        if on_progress is not None:
+            try:
+                on_progress(
+                    Progress(
+                        elapsed=deadline.elapsed(),
+                        slept=deadline.slept(),
+                        silent_for=silence.seconds(),
+                        note=note,
+                    )
+                )
+            except Exception:  # noqa: BLE001 - a heartbeat must not kill a review
+                log.get().debug("heartbeat failed", exc_info=True)
+
+        if deadline.expired():
+            stop_process(proc)
+            for worker in workers:
+                worker.join(timeout=5)
+            raise ModelError(
+                f"model call gave up after {deadline.awake_elapsed():.0f}s awake "
+                f"({deadline.elapsed():.0f}s elapsed, "
+                f"{deadline.slept():.0f}s of it asleep)"
+            )
+
+    # The process is gone; its pipes are at EOF, so these finish promptly. The
+    # timeout is a backstop against a grandchild holding the write end open.
+    for worker in workers:
+        worker.join(timeout=10)
+    return "".join(out), "".join(err)
 
 
 def _int(value: Any) -> int:
@@ -246,19 +416,28 @@ def run(
     system_prompt: str,
     user_prompt: str,
     add_dir: Path | None = None,
+    label: str = "",
+    on_progress: Any = None,
 ) -> ModelResult:
     """One model call. Returns the parsed JSON payload plus usage figures.
 
     ``cfg`` is a resolved provider block — see ``config.resolve_provider``.
-    """
-    import time
 
+    ``label`` names the call — ``owner/repo#123`` — so the dashboard can stop
+    this one without stopping the rest. ``on_progress`` is handed a ``Progress``
+    every few seconds while the call runs; it must not raise, and is wrapped so
+    that it cannot take a review down with it if it does.
+    """
     try:
         adapter = providers.get(str(cfg.get("type") or ""))
     except providers.ProviderError as exc:
         raise ModelError(str(exc)) from exc
 
-    timeout = int(cfg.get("timeout_seconds") or 900)
+    # A budget of awake seconds, not of elapsed ones: a call that spans a
+    # suspend was frozen for it rather than failing to make progress, and
+    # charging it for the lid being shut would kill work that was going to
+    # succeed. See ``clock``.
+    deadline = clock.Deadline(float(cfg.get("timeout_seconds") or 900))
 
     with tempfile.TemporaryDirectory(prefix="blinky-cwd-") as scratch:
         scratch_dir = Path(scratch)
@@ -270,7 +449,6 @@ def run(
             scratch=scratch_dir,
         )
 
-        started = time.monotonic()
         try:
             # Popen rather than run(), so the handle can be registered and the
             # call stopped when the tool is asked to quit. Its own session, so
@@ -295,21 +473,33 @@ def run(
                 "at it."
             ) from exc
 
-        _register(proc)
+        _register(proc, label)
         try:
-            stdout, stderr = proc.communicate(input=call.stdin, timeout=timeout)
-        except subprocess.TimeoutExpired as exc:
-            stop_process(proc)
-            raise ModelError(f"model call timed out after {timeout}s") from exc
+            stdout, stderr = _pump(
+                proc,
+                stdin_text=call.stdin,
+                deadline=deadline,
+                adapter=adapter,
+                on_progress=on_progress,
+            )
         finally:
             _forget(proc)
-        duration = time.monotonic() - started
+        duration = deadline.awake_elapsed()
+
+        # Drained here rather than inside the failure branch below, and whatever
+        # the outcome. A call cancelled a moment before it would have exited on
+        # its own reaches this line with a zero status, and a mark left behind
+        # by that would be read by the *next* call on the same pull request —
+        # reporting some unrelated failure as something the user asked for.
+        cancelled_by_hand = bool(label) and was_cancelled(label)
 
         if proc.returncode != 0:
             if _cancelled.is_set():
                 # Not a failure. We stopped it on the way out, and saying
                 # "codex exited -15" would read as a crash.
                 raise ModelError("model call stopped — shutting down")
+            if cancelled_by_hand:
+                raise ModelError("model call stopped — cancelled")
             detail = (stderr or stdout or "").strip()[:600]
             raise ModelError(f"{adapter.name} exited {proc.returncode}: {detail}")
 
@@ -321,6 +511,19 @@ def run(
             raise ModelError(str(exc)) from exc
 
     payload = extract_json(reply.text)
+
+    # Worth a line at INFO rather than DEBUG: this is the explanation for a
+    # review that appeared to take far longer than its timeout allows, which is
+    # otherwise one of the more alarming things this tool can print.
+    slept = deadline.slept()
+    if slept >= 60:
+        log.get().info(
+            "%s call ran across %.0fm of system sleep — %.0fs awake, %.0fs elapsed",
+            adapter.name,
+            slept / 60,
+            duration,
+            deadline.elapsed(),
+        )
 
     log.get().debug(
         "%s call finished in %.1fs (%s)",

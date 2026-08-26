@@ -92,6 +92,52 @@ def unplaceable_section(findings: list[Finding]) -> str:
     return "\n".join(lines)
 
 
+def round_policy(cfg: RepoConfig) -> dict[str, Any]:
+    return dict((cfg.review.get("rounds") or {}))
+
+
+def severities_allowed(cfg: RepoConfig, round_number: int) -> set[str]:
+    """Which severities may be *posted* on this round.
+
+    The bar rises as a pull request goes round again. Round one is a full
+    review. After that the author has already been told the small stuff, and
+    repeating the exercise on a re-read of the same code finds new small stuff
+    forever — so nits and notes stop, and eventually everything below a blocker
+    stops too.
+
+    This is a filter on what gets posted, not on what the model looked for. The
+    review still reads the whole change; it just stops narrating.
+    """
+    policy = round_policy(cfg)
+    allowed = {"blocker", "correctness", "nit", "note"}
+
+    blockers_only = policy.get("blockers_only_from_round")
+    if blockers_only is not None and round_number >= int(blockers_only):
+        return {"blocker"}
+
+    nits_until = policy.get("nits_until_round")
+    if nits_until is not None and round_number > int(nits_until):
+        allowed -= {"nit", "note"}
+
+    return allowed
+
+
+def filter_by_round(
+    findings: list[Finding], cfg: RepoConfig, round_number: int
+) -> tuple[list[Finding], list[Finding]]:
+    """Split findings into what this round may post and what it must hold back.
+
+    Returns ``(kept, dropped)``. Dropped findings are not posted anywhere — the
+    point is silence, so listing them in the summary would defeat it.
+    """
+    if round_number <= 1:
+        return list(findings), []
+    allowed = severities_allowed(cfg, round_number)
+    kept = [f for f in findings if f.severity in allowed]
+    dropped = [f for f in findings if f.severity not in allowed]
+    return kept, dropped
+
+
 def decide_event(findings: list[Finding], cfg: RepoConfig) -> tuple[str, bool]:
     """Choose the review event.
 

@@ -110,6 +110,11 @@ def status_of(pull_request: PullRequest) -> Status:
     """The one-phrase answer to "where is this", live work first."""
     activity = pull_request.activity
     if activity is not None:
+        # Gone quiet rather than merely slow — the model has printed nothing for
+        # long enough that it is worth a colour. Not the same claim as "hung":
+        # this says what is observable and leaves the verdict to the reader.
+        if activity.is_stalled:
+            return Status("quiet", URGENT)
         # No trailing ellipsis: the board prefixes a spinner, which says "still
         # going" better than punctuation does.
         return Status("replying" if activity.is_replying else "reviewing", LIVE)

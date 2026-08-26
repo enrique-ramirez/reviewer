@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import log
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS http_cache (
     url         TEXT PRIMARY KEY,
@@ -105,11 +107,22 @@ CREATE TABLE IF NOT EXISTS post_attempts (
 -- review takes. Transient by nature: reviews run one at a time inside a tick,
 -- so anything still here when a tick begins is left over from a process that
 -- died mid-review and is cleared.
+--
+-- The columns past started_at are the difference between "this is taking a
+-- while" and "this has hung", which a start time alone cannot tell you.
+-- heartbeat_at is when the call last checked in, slept_seconds is how much of
+-- the elapsed time the machine spent asleep, silent_seconds is how long the
+-- model has gone without printing anything, and note is whatever it was last
+-- seen doing.
 CREATE TABLE IF NOT EXISTS active_reviews (
-    repo       TEXT NOT NULL,
-    pr_number  INTEGER NOT NULL,
-    phase      TEXT NOT NULL,
-    started_at REAL NOT NULL,
+    repo           TEXT NOT NULL,
+    pr_number      INTEGER NOT NULL,
+    phase          TEXT NOT NULL,
+    started_at     REAL NOT NULL,
+    heartbeat_at   REAL,
+    slept_seconds  REAL,
+    silent_seconds REAL,
+    note           TEXT,
     PRIMARY KEY (repo, pr_number)
 );
 
@@ -281,6 +294,52 @@ def adopt_legacy_state_dir(state_dir: Path) -> Path | None:
     return legacy
 
 
+def _enable_wal(conn: sqlite3.Connection, attempts: int = 20, wait: float = 0.05) -> None:
+    """Turn on WAL, tolerating another connection doing the same thing.
+
+    The dashboard opens two connections to the same file — one on the reviewer's
+    thread, one for the interface — and on a first run they race. Switching
+    journal mode wants a brief exclusive lock, and SQLite answers ``database is
+    locked`` immediately for it rather than waiting out ``busy_timeout`` the way
+    an ordinary statement would. So the loser of that race used to raise, on the
+    very first launch and never again, which is the worst shape a bug can have.
+
+    Retried rather than fatal, and then given up on quietly: journal mode is a
+    property of the database rather than of a connection, so if this never wins
+    it is because somebody else already set it to exactly what we wanted.
+    """
+    for attempt in range(attempts):
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError:
+            if attempt == attempts - 1:
+                log.get().debug("could not set WAL; another connection got there first")
+                return
+            time.sleep(wait)
+
+
+def heartbeat(store: "Store", repo: str, pr_number: int) -> Any:
+    """An ``on_progress`` callback for ``model.run`` that records a heartbeat.
+
+    Here rather than in ``model`` because the database is this module's business
+    and the model call has no idea one exists. Takes anything with the fields of
+    a ``model.Progress`` — the two modules stay unaware of each other, and the
+    tests can beat this with a stub.
+    """
+
+    def beat(progress: Any) -> None:
+        store.beat_active(
+            repo,
+            pr_number,
+            slept_seconds=getattr(progress, "slept", 0.0),
+            silent_seconds=getattr(progress, "silent_for", 0.0),
+            note=getattr(progress, "note", "") or "",
+        )
+
+    return beat
+
+
 class Store:
     def __init__(self, state_dir: Path, filename: str = "state.sqlite3") -> None:
         """Open the state database.
@@ -298,7 +357,7 @@ class Store:
         self.path = self.state_dir / filename
         self.conn = sqlite3.connect(self.path, timeout=30)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL")
+        _enable_wal(self.conn)
         with closing(self.conn.cursor()) as cur:
             cur.executescript(SCHEMA)
         self.conn.commit()
@@ -322,6 +381,12 @@ class Store:
             "review_cached_tokens": "INTEGER",
             "review_cost_usd": "REAL",
             "review_model": "TEXT",
+        },
+        "active_reviews": {
+            "heartbeat_at": "REAL",
+            "slept_seconds": "REAL",
+            "silent_seconds": "REAL",
+            "note": "TEXT",
         },
         "review_events": {
             "calls": "INTEGER",
@@ -608,11 +673,58 @@ class Store:
     def begin_active(self, repo: str, pr_number: int, phase: str) -> None:
         self.conn.execute(
             """
-            INSERT INTO active_reviews (repo, pr_number, phase, started_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(repo, pr_number) DO UPDATE SET phase = excluded.phase
+            INSERT INTO active_reviews (repo, pr_number, phase, started_at,
+                                        heartbeat_at, slept_seconds,
+                                        silent_seconds, note)
+            VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL)
+            ON CONFLICT(repo, pr_number) DO UPDATE SET
+                phase = excluded.phase,
+                -- A phase change is a fresh piece of work on the same row, so
+                -- the previous one's heartbeat must not carry over and describe
+                -- it. Left NULL until the new call checks in for the first time.
+                heartbeat_at = NULL,
+                slept_seconds = NULL,
+                silent_seconds = NULL,
+                note = NULL
             """,
             (repo, pr_number, phase, time.time()),
+        )
+        self.conn.commit()
+
+    def beat_active(
+        self,
+        repo: str,
+        pr_number: int,
+        *,
+        slept_seconds: float = 0.0,
+        silent_seconds: float = 0.0,
+        note: str = "",
+    ) -> None:
+        """Record that live work is still live, and what it is doing.
+
+        Written every few seconds from inside the model call. The point is not
+        the timestamp on its own but what it lets the board say: a review that
+        has been on screen for fifteen minutes is alarming, and the same review
+        annotated "twelve of those asleep, last spoke four seconds ago" is not.
+
+        Deliberately an UPDATE and not an upsert. If the row is gone the work is
+        over — or the tick that owned it died and cleared it — and a heartbeat
+        must not be the thing that resurrects a review nobody is running.
+        """
+        self.conn.execute(
+            """
+            UPDATE active_reviews
+               SET heartbeat_at = ?, slept_seconds = ?, silent_seconds = ?, note = ?
+             WHERE repo = ? AND pr_number = ?
+            """,
+            (
+                time.time(),
+                float(slept_seconds),
+                float(silent_seconds),
+                note or None,
+                repo,
+                pr_number,
+            ),
         )
         self.conn.commit()
 

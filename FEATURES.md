@@ -150,6 +150,7 @@ thing meant the one you could read was the one that was out of date.
 | `b` | History | fill in past history (press again to stop) |
 | `g` | History | write a summary for the selected merge — one model call |
 | `c` | any | read the review conversation without leaving the terminal |
+| `x` | Dashboard | stop the review running on the selected row |
 | `Escape` | History | clear the filters |
 | `e` | any | focus the repository sidebar (only with 2+ repos) |
 | `E` | any | fold the sidebar to a rail, and back |
@@ -159,6 +160,48 @@ flight rather than letting it finish. A review whose result nobody is left to
 post is worth nothing, so finishing it would buy the bill and no review. Nothing
 part-done is posted or recorded: the pull request is left exactly as it was, and
 the next run picks it up from the start.
+
+### When a review is taking a while
+
+A live row says how long it has been going. Two things can make that number
+look worse than it is, and the board says which:
+
+```
+⠹ reviewing right now — 15m 40s  (12m of that asleep)  · reading auth.py
+```
+
+**Time asleep.** Close the lid and the clock a person reads keeps counting while
+the review does not. The reviewer's own timeout does not count that time —
+a call frozen by a suspend never got a chance to make progress, and charging it
+for the hours your laptop was shut would kill work that was about to succeed. So
+elapsed time and the timeout genuinely disagree, and the line says by how much
+rather than leaving you to wonder.
+
+**Silence.** With `claude` the review streams as it happens, so the board can
+say what the model is doing right now. If nothing arrives for ten minutes the
+row turns red and says `quiet 12m` instead — how long it has been silent, not
+how long it has been running. That is the number worth reading: a review twenty
+minutes in that spoke four seconds ago is working; one that has said nothing for
+twenty minutes is not.
+
+Ten minutes rather than something tighter because the stream carries one event
+per *turn*, not per token, and the final write-up is a single turn that can run
+for minutes with nothing to show. The other providers do not stream at all, so
+they never report silence and never look quiet — there is genuinely nothing to
+go on, and saying so beats guessing.
+
+Nothing is killed automatically on either signal. A review is minutes of work
+and real quota, and from outside the process a slow call and a stuck one look
+identical — so the board shows what it can actually see and leaves the call to
+you. **`x`** stops the one under the cursor; the pass moves on to the next pull
+request and the next run picks this one up from the start.
+
+The backstop is still there: a call that spends `timeout_seconds` awake without
+finishing is given up on. `max_tick_seconds` is the matching limit for a whole
+pass — with reviews running one at a time, `max_reviews_per_tick` bounds the
+count but not the time, and without it the repositories at the end of the list
+can wait on everything ahead of them. Neither one interrupts a review that has
+already started.
 
 ### Reading the review
 
@@ -348,8 +391,41 @@ A PR with unaddressed nits and a silent author waits indefinitely, on purpose.
 
 When a thread goes back and forth past
 `review.max_disagreement_rounds_per_thread`, that one thread goes quiet and you
-get a notification. Review rounds themselves are uncapped — a PR can go fifteen
-rounds — and every other thread carries on.
+get a notification, and every other thread carries on.
+
+## Coming back to the same pull request
+
+A review that says three useful things is a good review. Nine of them in a row
+on the same pull request is a wall of a hundred and twenty comments, and that is
+what this tool did before `review.rounds` existed: every push triggered a fresh
+full review with no memory of the last one, and a fresh read of the same
+eighteen hundred lines always turns up something new to say.
+
+So a repeat review is a narrower job than a first one. Round one is unchanged.
+After that, four things are different:
+
+| | What changes | Setting |
+|---|---|---|
+| **Scope** | Only the diff since the last review is sent, not the whole PR again | `rounds.incremental_after_first` |
+| **Memory** | The points you already raised and closed are listed in the prompt, with an instruction not to raise them again | always on |
+| **Bar** | Nits and notes stop after round 1; from round 4 only blockers are posted at all | `rounds.nits_until_round`, `rounds.blockers_only_from_round` |
+| **Stop** | Optionally, stop reviewing entirely after N rounds and leave it to a human | `rounds.max_rounds` |
+
+The severity bar is enforced twice: `personality/08-rounds.md` asks the model
+for the restraint, and the pipeline filters anything that gets through anyway.
+Held-back findings are dropped rather than moved into the summary — the point is
+silence — but the summary says how many there were, so nothing disappears
+without a trace.
+
+This matters most when the author is an agent. An agent fixes a nit as dutifully
+as a blocker, and every fix is another push, another round, and another set of
+comments. A nit that a person would weigh and decline costs an agent-authored PR
+a full cycle.
+
+An incremental round falls back to the full diff when the delta cannot be worked
+out — usually a force-push that orphaned the previously reviewed SHA. Files that
+arrive from a base-branch merge are filtered out, so a `main` merge does not read
+as work the author did.
 
 ## Two voices, one call
 
@@ -558,12 +634,17 @@ of documentation. Each provider gets its own list below.
 
 #### Claude Code
 
-`"type": "claude"` · `claude -p --output-format json`
+`"type": "claude"` · `claude -p --output-format stream-json --verbose`
 
 The default, and the reason the other defaults look as they do: it is the only
 one here that takes both an explicit tool allowlist and an explicit denylist, so
 *may read files, may not run anything* is a fact about the process rather than a
 hope about the model.
+
+It is also the only one that reports as it goes rather than printing everything
+at the end, which is what lets the dashboard say what the model is reading right
+now — and, more usefully, tell a review that has gone silent apart from one that
+is merely slow. See [when a review is taking a while](#when-a-review-is-taking-a-while).
 
 - `allowed_tools` is passed through unchanged — these are its own tool names.
 - The denylist (`Bash`, `Write`, `Edit`, `WebFetch`, `Task`, …) is sent on every
@@ -631,14 +712,24 @@ Create a **fine-grained** token at
 | Repository access | Only the repos you configure |
 | Contents | **Read-only** |
 | Pull requests | **Read and write** |
-| Checks | **Read-only** |
 | Commit statuses | **Read-only** |
+| Actions | **Read-only** |
 | Metadata | Read-only (mandatory) |
 
-`Checks` and `Commit statuses` are what let it see whether CI is green. Without
-them GitHub refuses the `statusCheckRollup` GraphQL field, and every PR is skipped
-with a message saying so — deliberately, since a reviewer that cannot see CI would
-otherwise approve pull requests with failing builds.
+`Commit statuses` and `Actions` are what let it see whether CI is green. The
+permission that covers CI properly is `Checks`, and GitHub
+[does not offer it on fine-grained tokens](https://github.com/orgs/community/discussions/179545)
+— only on GitHub Apps. Without it GitHub refuses the `statusCheckRollup` GraphQL
+field, so the reviewer falls back to the Actions API (everything in Actions, but
+not a check posted by a third-party App) or to commit statuses (integrations that
+post statuses, but not Actions check runs). `--check` reports which fallbacks the
+token reaches and the `gates.ci_source` value that goes with each. If none of
+them reaches anything, every PR is skipped with a message saying so —
+deliberately, since a reviewer that cannot see CI would otherwise approve pull
+requests with failing builds. `gates.require_ci_green: false` opts out of that.
+
+`Code quality` sounds relevant and is not: it reads findings from GitHub's paid
+Code Quality product, and covers neither CI results nor approvals. Leave it off.
 
 `Contents: Read-only` is the load-bearing part: with it, this tool cannot push a
 commit, create a branch, or merge anything, whatever else goes wrong.
@@ -662,6 +753,7 @@ changes.
 | `personality/*.md` | yes | Your review voice and standards. Portable across jobs. |
 | `config/repos.sample/` | yes | Sample repo configs |
 | `config/global.sample.json` | yes | Sample global config |
+| `config/.env.sample` | yes | Sample `.env`, and where the token permissions are written down |
 | `.env` | **no** | Your token |
 | `config/global.json` | **no** | Your global config |
 | `config/repos/*.json` | **no** | Your repo configs |

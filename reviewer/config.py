@@ -42,6 +42,14 @@ GLOBAL_DEFAULTS: dict[str, Any] = {
     "tick_seconds": 900,
     "default_language": "en",
     "max_reviews_per_tick": 6,
+    # A ceiling on how long one pass may spend before it stops starting new
+    # reviews. max_reviews_per_tick bounds the count, not the time, and the two
+    # come apart badly: six reviews against a 900-second provider timeout is
+    # ninety minutes of worst case against a fifteen-minute tick. Reviews run
+    # one at a time, so a repository at the end of the list waits for all of
+    # that. Nothing in flight is interrupted — this only declines to start the
+    # next one. Null means no limit.
+    "max_tick_seconds": 1800,
     "provider": "claude",
     "providers": {
         "claude": {
@@ -124,6 +132,7 @@ REPO_DEFAULTS: dict[str, Any] = {
             "05-severity",
             "06-voice-human",
             "07-voice-agent",
+            "08-rounds",
             "40-conventions",
         ],
         "repo_context": {
@@ -133,6 +142,18 @@ REPO_DEFAULTS: dict[str, Any] = {
             "max_chars": 20000,
         },
         "max_disagreement_rounds_per_thread": 3,
+        # What a *repeat* review of the same pull request is allowed to do. The
+        # defaults exist because the first version of this tool had none: every
+        # push triggered a fresh full review with no memory of the last one, and
+        # a pull request that took nine rounds to land collected nine rounds'
+        # worth of new nits. Three findings a round is a good review; nine
+        # rounds of three is a wall.
+        "rounds": {
+            "incremental_after_first": True,
+            "nits_until_round": 1,
+            "blockers_only_from_round": 4,
+            "max_rounds": None,
+        },
     },
     "approval": {
         "mode": "manual",
@@ -294,6 +315,7 @@ class GlobalConfig:
     tick_seconds: int
     default_language: str
     max_reviews_per_tick: int
+    max_tick_seconds: int | None
     provider: str
     providers: dict[str, dict[str, Any]]
     merge_summary: dict[str, Any]
@@ -331,6 +353,9 @@ class GlobalConfig:
             tick_seconds=int(data["tick_seconds"]),
             default_language=str(data["default_language"]),
             max_reviews_per_tick=int(data["max_reviews_per_tick"]),
+            max_tick_seconds=(
+                int(data["max_tick_seconds"]) if data.get("max_tick_seconds") else None
+            ),
             provider=default,
             providers=checked,
             merge_summary=data["merge_summary"],

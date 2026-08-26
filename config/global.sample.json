@@ -7,6 +7,16 @@
   "max_reviews_per_tick": 6,
   "$comment_max_reviews": "Quota is shared across all repos. Repos are walked in the order they load (alphabetical by filename), so name them to encode priority.",
 
+  "max_tick_seconds": 1800,
+  "$comment_max_tick_seconds": [
+    "A ceiling on how long one pass may run before it stops starting new reviews.",
+    "max_reviews_per_tick bounds the count, not the time, and the two come apart:",
+    "six reviews against a 900s provider timeout is 90 minutes of worst case.",
+    "Reviews run one at a time, so the repos at the end of the list wait for all",
+    "of it. Nothing in flight is cut off — this only declines to start the next",
+    "one. null means no limit."
+  ],
+
   "provider": "claude",
   "$comment_provider": "Which entry from 'providers' below does the reviewing by default. A repository can name a different one in its own config; see config/repos.sample/.",
 

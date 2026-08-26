@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from reviewer import model, providers
@@ -98,6 +99,183 @@ class Claude(unittest.TestCase):
         # Older CLI versions print the reply directly, with no envelope.
         adapter, call = prepare("claude")
         self.assertEqual(adapter.read(call, '{"a": 1}').text, '{"a": 1}')
+
+
+def stream(*events: dict) -> str:
+    """The CLI's stream-json output: one compact JSON object per line."""
+    return "".join(json.dumps(event) + "\n" for event in events)
+
+
+def assistant(*blocks: dict) -> dict:
+    return {"type": "assistant", "message": {"content": list(blocks)}}
+
+
+class ClaudeStreaming(unittest.TestCase):
+    """stream-json, which is what makes a stuck call distinguishable from a slow
+    one — a call that has printed nothing for ten minutes looks nothing like a
+    call that is ten minutes in and still working, but only if something is
+    reading the lines as they arrive."""
+
+    def test_it_asks_for_a_stream_and_the_verbose_flag_that_needs(self):
+        _, call = prepare("claude")
+        self.assertEqual(flag(call.command, "--output-format"), "stream-json")
+        # Required alongside stream-json under --print; without it the CLI
+        # refuses the combination and the review never starts.
+        self.assertIn("--verbose", call.command)
+
+    def test_the_answer_comes_from_the_final_result_event(self):
+        adapter, call = prepare("claude")
+        reply = adapter.read(
+            call,
+            stream(
+                {"type": "system", "subtype": "init"},
+                assistant({"type": "text", "text": "thinking out loud"}),
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "result": '{"verdict": "ok"}',
+                    "usage": {"output_tokens": 12},
+                    "total_cost_usd": 0.5,
+                },
+            ),
+        )
+        self.assertEqual(reply.text, '{"verdict": "ok"}')
+        self.assertEqual(reply.usage["output_tokens"], 12)
+        self.assertEqual(reply.usage["total_cost_usd"], 0.5)
+
+    def test_an_error_event_is_raised_with_only_the_readable_part(self):
+        adapter, call = prepare("claude")
+        with self.assertRaises(providers.ProviderError) as caught:
+            adapter.read(
+                call,
+                stream(
+                    {
+                        "type": "result",
+                        "is_error": True,
+                        "result": "usage limit reached",
+                        "session_id": "0c18e40c-9a3e-4313",
+                        "usage": {"input_tokens": 1745},
+                    }
+                ),
+            )
+        message = str(caught.exception)
+        self.assertIn("usage limit reached", message)
+        # Not the whole event: the session id and the token counts bury the one
+        # sentence that says what went wrong.
+        self.assertNotIn("0c18e40c", message)
+
+    def test_a_stream_with_no_result_event_falls_back_to_what_was_said(self):
+        # A call killed part-way still has the model's own words in it, and
+        # those are a far better guess than the raw JSONL — which would reach
+        # the JSON extractor as a wall of events and fail to parse.
+        adapter, call = prepare("claude")
+        reply = adapter.read(
+            call,
+            stream(
+                assistant({"type": "text", "text": "first"}),
+                assistant({"type": "text", "text": '{"verdict": "ok"}'}),
+            ),
+        )
+        self.assertEqual(reply.text, '{"verdict": "ok"}')
+
+    def test_the_answer_is_found_without_reading_the_whole_stream(self):
+        # Every file the model read is in the stream as a tool result with its
+        # contents inline, so a big review runs to megabytes. The closing event
+        # is by definition the last line, and parsing everything before it to
+        # reach it would hold the review in memory twice for nothing.
+        parsed = []
+        bulk = stream(
+            *[
+                {
+                    "type": "user",
+                    "message": {"content": [{"type": "tool_result", "content": "x" * 80}]},
+                }
+                for _ in range(500)
+            ]
+        )
+        tail = json.dumps({"type": "result", "result": "done", "usage": {}})
+
+        adapter, call = prepare("claude")
+        real = providers.json.loads
+
+        def counting_loads(text, *a, **kw):
+            parsed.append(text)
+            return real(text, *a, **kw)
+
+        with mock.patch.object(providers.json, "loads", counting_loads):
+            reply = adapter.read(call, bulk + tail + "\n")
+
+        self.assertEqual(reply.text, "done")
+        # One line read, not five hundred and one.
+        self.assertEqual(len(parsed), 1)
+
+    def test_a_single_json_object_is_still_understood(self):
+        # --output-format json, from an older CLI or from extra_args.
+        adapter, call = prepare("claude")
+        reply = adapter.read(
+            call, json.dumps({"type": "result", "result": "hi", "usage": {}})
+        )
+        self.assertEqual(reply.text, "hi")
+
+
+class ClaudeProgress(unittest.TestCase):
+    """The note beside the spinner. Never worth failing a review over, so the
+    only hard requirement is that nothing here raises."""
+
+    def setUp(self):
+        self.adapter = providers.get("claude")
+
+    def test_a_tool_call_says_what_is_being_read(self):
+        note = self.adapter.progress(
+            json.dumps(
+                assistant(
+                    {
+                        "type": "tool_use",
+                        "name": "Read",
+                        "input": {"file_path": "/repo/src/auth.py"},
+                    }
+                )
+            )
+        )
+        # The basename only: this lands beside a spinner in a fixed-width line.
+        self.assertEqual(note, "reading auth.py")
+
+    def test_the_last_block_of_a_turn_wins(self):
+        note = self.adapter.progress(
+            json.dumps(
+                assistant(
+                    {"type": "text", "text": "let me look"},
+                    {"type": "tool_use", "name": "Grep", "input": {"pattern": "TODO"}},
+                )
+            )
+        )
+        self.assertEqual(note, "searching TODO")
+
+    def test_prose_with_no_tool_call_means_the_review_is_being_written(self):
+        note = self.adapter.progress(
+            json.dumps(assistant({"type": "text", "text": "Here are my findings"}))
+        )
+        self.assertEqual(note, "writing the review")
+
+    def test_events_with_no_news_leave_the_previous_note_standing(self):
+        for line in (
+            "",
+            "not json at all",
+            json.dumps({"type": "result", "result": "done"}),
+            json.dumps({"type": "user", "message": {"content": []}}),
+        ):
+            self.assertIsNone(self.adapter.progress(line), line)
+
+    def test_an_unknown_tool_degrades_to_its_own_name(self):
+        note = self.adapter.progress(
+            json.dumps(assistant({"type": "tool_use", "name": "Sparkle", "input": {}}))
+        )
+        self.assertEqual(note, "sparkle")
+
+    def test_a_provider_that_does_not_stream_reports_nothing(self):
+        # The honest default: a CLI that prints one object at the end has
+        # nothing to say until it is finished.
+        self.assertIsNone(providers.get("gemini").progress('{"type": "assistant"}'))
 
 
 class Codex(unittest.TestCase):
@@ -283,6 +461,18 @@ class Choosing(unittest.TestCase):
         self.assertEqual(cfg["name"], "claude")
         self.assertEqual(cfg["type"], "claude")
         self.assertEqual(cfg["command"], "claude")
+
+    def test_a_pass_has_a_time_limit_of_its_own(self):
+        # max_reviews_per_tick bounds the count, not the time. Six reviews
+        # against a 900s provider timeout is ninety minutes of worst case
+        # against a fifteen-minute tick, and the repositories at the end of the
+        # list are the ones that wait for it.
+        self.assertEqual(GlobalConfig.load(self.dir).max_tick_seconds, 1800)
+        self.assertEqual(self.load(max_tick_seconds=600).max_tick_seconds, 600)
+
+    def test_a_pass_can_be_given_no_time_limit(self):
+        self.assertIsNone(self.load(max_tick_seconds=None).max_tick_seconds)
+        self.assertIsNone(self.load(max_tick_seconds=0).max_tick_seconds)
 
     def test_a_repo_can_pin_only_the_model(self):
         global_cfg = self.load(providers={"claude": {"model": "claude-opus-5"}})

@@ -101,6 +101,67 @@ class BoardCells(unittest.TestCase):
         cells = board.row_cells(pull_request(needs_human=1), NOW, 0)
         self.assertEqual(cells[0].plain, theme.APPROVAL.glyph)
 
+    def test_a_quiet_row_shows_how_long_it_has_been_quiet(self) -> None:
+        # Not how long it has been running: a call that has said nothing for
+        # twelve minutes is the thing worth reading, and it is also the shorter
+        # number, which is what keeps this inside sixteen cells.
+        quiet = pull_request(
+            activity=Activity("reviewing", NOW - 3600, silent_seconds=720)
+        )
+        cells = board.row_cells(quiet, NOW, 3)
+        self.assertIn("quiet", cells[2].plain)
+        self.assertIn("12m", cells[2].plain)
+        self.assertLessEqual(len(cells[2].plain), 16)
+
+
+class ActivityLine(unittest.TestCase):
+    """The live line under a selected pull request, which is where a review
+    that slept through the night has to stop looking like a hung one."""
+
+    def line(self, activity: Activity) -> str:
+        return board._activity_line(pull_request(activity=activity), NOW, 0).plain
+
+    def test_a_plain_review_says_only_how_long(self) -> None:
+        text = self.line(Activity("reviewing", NOW - 90))
+        self.assertIn("reviewing right now", text)
+        self.assertIn("1m 30s", text)
+        self.assertNotIn("asleep", text)
+
+    def test_time_asleep_is_called_out(self) -> None:
+        # The whole incident this exists for: fifteen minutes on the clock, of
+        # which twelve were the laptop being shut.
+        text = self.line(
+            Activity("reviewing", NOW - 940, slept_seconds=720, silent_seconds=4)
+        )
+        self.assertIn("15m 40s", text)
+        self.assertIn("12m of that asleep", text)
+
+    def test_a_few_seconds_of_drift_is_not_worth_mentioning(self) -> None:
+        text = self.line(Activity("reviewing", NOW - 90, slept_seconds=3))
+        self.assertNotIn("asleep", text)
+
+    def test_a_note_says_what_the_model_is_doing(self) -> None:
+        text = self.line(Activity("reviewing", NOW - 90, note="reading auth.py"))
+        self.assertIn("reading auth.py", text)
+
+    def test_a_long_silent_final_write_up_is_not_called_quiet(self) -> None:
+        # The stream carries one event per turn, not per token, so the last
+        # turn — the write-up itself — is legitimately silent for minutes. The
+        # threshold sits above that on purpose.
+        text = self.line(Activity("reviewing", NOW - 900, silent_seconds=420))
+        self.assertNotIn("quiet", text)
+
+    def test_going_quiet_replaces_the_note(self) -> None:
+        # Silence is the more useful thing to say, and it says the note is
+        # stale anyway.
+        text = self.line(
+            Activity(
+                "reviewing", NOW - 900, silent_seconds=600, note="reading auth.py"
+            )
+        )
+        self.assertIn("quiet for 10m", text)
+        self.assertNotIn("reading auth.py", text)
+
 
 class MergeCells(unittest.TestCase):
     def test_a_written_summary_is_shown_plainly(self) -> None:

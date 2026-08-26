@@ -166,6 +166,7 @@ class Dashboard(App[None]):
         Binding("b", "backfill", "Fill history"),
         Binding("g", "describe", "Summarise"),
         Binding("c", "conversation", "Read the review"),
+        Binding("x", "stop_review", "Stop review", show=False),
         Binding("l", "toggle_log", "Log"),
         Binding("r", "reload", "Refresh"),
         # Shown, not hidden: the footer is the only place the keys are listed
@@ -525,6 +526,32 @@ class Dashboard(App[None]):
         record = self.view.current
         if record is not None and record.url and browser.open_url(record.url):
             self.notify(f"opened #{record.number} in your browser", timeout=2)
+
+    def action_stop_review(self) -> None:
+        """Stop the model call on the row under the cursor.
+
+        The escape hatch for a review that has genuinely stopped moving, and the
+        reason nothing else in this tool kills one automatically. A review is
+        minutes of work and real quota, and from the outside a slow call and a
+        stuck one look identical — so the board says what it can see (how long,
+        how much of it asleep, how long since the model last spoke) and leaves
+        the judgement to whoever is reading it.
+
+        Nothing else is touched: the tick moves on to the next pull request, and
+        the next pass will pick this one up again from the top.
+        """
+        record = self.view.current
+        if self.typing or self.asking or record is None:
+            return
+        if record.activity is None:
+            self.notify(f"#{record.number} is not being reviewed", timeout=3)
+            return
+        if model.cancel(record.key):
+            self.notify(f"stopping the review of #{record.number}…", timeout=3)
+        else:
+            # The row says live work but no process answers to it — the call
+            # finished between the last redraw and this keystroke.
+            self.notify(f"#{record.number} had already finished", timeout=3)
 
     def action_toggle_log(self) -> None:
         """Give the log's ten lines back to whichever table is showing.

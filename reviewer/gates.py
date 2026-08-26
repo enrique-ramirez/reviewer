@@ -167,6 +167,17 @@ def evaluate(
     if explicitly_requested:
         return _go("re-review requested", "review_requested")
 
+    # A pull request that has gone round this many times is not going to be
+    # settled by another review. Asking for one explicitly still works — the
+    # check sits below that on purpose.
+    max_rounds = (cfg.review.get("rounds") or {}).get("max_rounds")
+    if max_rounds is not None and pr_state.review_round >= int(max_rounds):
+        return _skip(
+            f"{pr_state.review_round} review rounds already — at the "
+            f"review.rounds.max_rounds limit of {max_rounds}. Ask for a "
+            "re-review to override, or merge it."
+        )
+
     if not already_reviewed_this_sha:
         if pr_state.last_reviewed_head_sha is None:
             return _go("not reviewed yet", "first_review")

@@ -98,9 +98,15 @@ def legend() -> Text:
 
 def live_status(pull_request: PullRequest, now: float, frame: int) -> str:
     """The status column while work is in flight, kept inside its 16 cells."""
+    activity = pull_request.activity
     label = status.status_of(pull_request).text
-    running = formatting.elapsed_brief(pull_request.activity.running_for(now))
-    return f"{theme.spinner_frame(frame)} {label} {running}"
+    # For a call that has gone quiet the useful number is how long it has been
+    # quiet, not how long it has been running — and it is the shorter of the
+    # two, which is what keeps this inside the column.
+    seconds = (
+        activity.silent_seconds if activity.is_stalled else activity.running_for(now)
+    )
+    return f"{theme.spinner_frame(frame)} {label} {formatting.elapsed_brief(seconds)}"
 
 
 def row_cells(pull_request: PullRequest, now: float, frame: int) -> Cells:
@@ -139,17 +145,42 @@ def _byline(pull_request: PullRequest) -> Text:
 
 
 def _activity_line(pull_request: PullRequest, now: float, frame: int) -> Text | None:
+    """The live line: how long, and — when they differ — why it is that long.
+
+    A bare elapsed time is what made a slept-through review indistinguishable
+    from a hung one. The clock a person watches counts the hours their laptop
+    spent shut; the timeout that would rescue a stuck call does not. Showing
+    only the first number invites exactly the wrong conclusion, so where the two
+    disagree this says so.
+    """
     activity = pull_request.activity
     if activity is None:
         return None
     verb = "replying to threads" if activity.is_replying else "reviewing"
     running = formatting.elapsed(activity.running_for(now))
-    return prose.join(
-        prose.line(
-            f"{theme.spinner_frame(frame)} {verb} right now — {running}", theme.LIVE
-        ),
-        prose.blank(),
+
+    line = prose.span(
+        f"{theme.spinner_frame(frame)} {verb} right now — {running}", theme.LIVE
     )
+
+    # Only when it is a meaningful share of the total: a few seconds of drift
+    # between two clocks is noise, and annotating it would be worse than silent.
+    slept = activity.slept_seconds
+    if slept >= 60:
+        line.append(
+            f"  ({formatting.elapsed_brief(slept)} of that asleep)", style=theme.MUTED
+        )
+
+    if activity.is_stalled:
+        line.append(
+            f"  · quiet for {formatting.elapsed_brief(activity.silent_seconds)}",
+            style=theme.URGENT,
+        )
+    elif activity.note:
+        line.append(f"  · {activity.note}", style=theme.MUTED)
+
+    line.append("\n")
+    return prose.join(line, prose.blank())
 
 
 def _flag_lines(pull_request: PullRequest) -> Text | None:

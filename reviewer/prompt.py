@@ -130,6 +130,40 @@ def build_system(
     return "\n\n---\n\n".join(parts)
 
 
+def _settled_block(threads: list[ReviewThread], identity: str | None) -> str:
+    """Points we already made on this pull request and that are now closed.
+
+    Without this the reviewer walks into round nine believing it has never
+    spoken. It re-reads the same code with fresh eyes, finds another two or
+    three reasonable things, and the author gets a new wall of comments for
+    work they already did. One line per settled point is enough to stop that,
+    and it costs a fraction of what the diff costs.
+    """
+    settled = [t for t in threads if t.is_resolved and t.is_ours(identity)]
+    if not settled:
+        return ""
+
+    entries: list[str] = []
+    for thread in settled:
+        location = f"{thread.path}:{thread.line or thread.original_line or '?'}"
+        first = thread.comments[0].body.strip() if thread.comments else ""
+        # The title line is what identifies the point; the rest was the argument
+        # for it, which is over.
+        headline = " ".join(first.splitlines()[0].split())[:160]
+        entries.append(f"- {location} — {headline}")
+
+    return (
+        "## Points you have already made and closed\n\n"
+        "You raised these on earlier rounds of this same pull request. The "
+        "author addressed them and the threads are resolved.\n\n"
+        + "\n".join(entries)
+        + "\n\nDo not raise these again. Do not raise variations of them on "
+        "neighbouring lines. If one of them was genuinely not fixed, that is "
+        "worth saying — say it as a regression, name the thread, and show the "
+        "code that still has the problem."
+    )
+
+
 def _thread_block(threads: list[ReviewThread], identity: str | None) -> str:
     open_threads = [t for t in threads if not t.is_resolved]
     if not open_threads:
@@ -170,6 +204,78 @@ def _issue_block(issues: list[dict[str, Any]]) -> str:
     return "\n\n".join(blocks)
 
 
+_SEVERITY_BAR = {
+    frozenset({"blocker"}): (
+        "Only `blocker` findings may be posted on this round. Anything below "
+        "that bar stays in your head. If there is no blocker, say the change "
+        "looks fine and return an empty findings array — that is the expected "
+        "outcome here, not a failure to find something."
+    ),
+    frozenset({"blocker", "correctness"}): (
+        "Only `blocker` and `correctness` findings may be posted on this round. "
+        "No nits, no notes — the author has had those already. An empty findings "
+        "array is a normal outcome."
+    ),
+}
+
+
+def _round_brief(
+    round_number: int,
+    reviewed_since: str | None,
+    severities_allowed: set[str] | None,
+) -> str:
+    """What is different about this round, in the model's own terms.
+
+    ``round_number`` used to be passed in as a bare number with nothing attached
+    to it, which meant it changed nothing. This is the instruction that makes it
+    matter.
+    """
+    if round_number <= 1:
+        return (
+            "## This round\n\n"
+            "First review of this pull request. Read all of it."
+        )
+
+    lines = [
+        "## This round",
+        "",
+        f"This is round {round_number}. You have reviewed this pull request "
+        f"{round_number - 1} time(s) already, and the author has pushed since.",
+        "",
+    ]
+
+    if reviewed_since:
+        lines.append(
+            "**The diff below is only what changed since your last review** "
+            f"(since `{reviewed_since[:8]}`), not the whole pull request. Judge "
+            "the new work. Code you already reviewed and did not object to is "
+            "settled — it is not in the diff, and re-litigating it from the "
+            "checkout is not what this round is for."
+        )
+    else:
+        lines.append(
+            "The diff below is the whole pull request again. You have read most "
+            "of this before. Look for what changed since your last review and "
+            "for anything the changes since then have broken — not for a fresh "
+            "set of observations about code you already passed."
+        )
+
+    lines.append("")
+    lines.append(
+        "A re-read of familiar code will always turn up something new to say. "
+        "That instinct is what turns a three-round pull request into a "
+        "nine-round one. The question on a later round is narrower: **did the "
+        "author's fixes work, and did they break anything?**"
+    )
+
+    if severities_allowed is not None:
+        bar = _SEVERITY_BAR.get(frozenset(severities_allowed))
+        if bar:
+            lines.extend(["", bar])
+
+    return "\n".join(lines)
+
+
 def build_review_user_prompt(
     *,
     cfg: RepoConfig,
@@ -181,6 +287,8 @@ def build_review_user_prompt(
     checkout_path: Path | None,
     round_number: int,
     axes: list[str],
+    reviewed_since: str | None = None,
+    severities_allowed: set[str] | None = None,
 ) -> str:
     sections: list[str] = []
 
@@ -194,6 +302,8 @@ def build_review_user_prompt(
         f"{snapshot.changed_files} files\n"
         f"Review round: {round_number}"
     )
+
+    sections.append(_round_brief(round_number, reviewed_since, severities_allowed))
 
     sections.append(f"## PR description\n\n{pr_body.strip() or '(empty)'}")
 
@@ -212,9 +322,18 @@ def build_review_user_prompt(
         f"## Existing review threads\n\n{_thread_block(snapshot.threads, cfg.identity)}"
     )
 
+    settled = _settled_block(snapshot.threads, cfg.identity)
+    if settled:
+        sections.append(settled)
+
     note = manifest_note(bundle)
+    scope = (
+        f"lines changed since `{reviewed_since[:8]}`"
+        if reviewed_since
+        else "changed lines"
+    )
     coverage = (
-        f"{bundle.reviewable_lines} of {bundle.total_lines} changed lines were sent"
+        f"{bundle.reviewable_lines} of {bundle.total_lines} {scope} were sent"
     )
     if note:
         coverage += f" ({note})"

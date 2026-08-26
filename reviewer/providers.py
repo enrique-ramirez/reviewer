@@ -152,6 +152,25 @@ class Adapter:
     def read(self, call: Call, stdout: str) -> Reply:
         raise NotImplementedError
 
+    def progress(self, line: str) -> str | None:
+        """A short note about where the call has got to, from one output line.
+
+        Called for every line the CLI prints, as it prints it. Returning a
+        string replaces the note the dashboard shows beside the spinner;
+        returning ``None`` leaves the previous one standing, which is what a
+        line that carries no news should do.
+
+        The default is ``None`` for every line: a CLI that prints its answer in
+        one go at the end has nothing to report until it is finished, and
+        pretending otherwise would be worse than an honest spinner. Providers
+        that stream override this.
+
+        Must be cheap — it runs on the read thread, once per line — and must not
+        raise. ``model`` guards it anyway, on the principle that no progress
+        note is worth losing a review over.
+        """
+        return None
+
     # Shared bits.
 
     def command_name(self, cfg: dict[str, Any]) -> str:
@@ -173,6 +192,101 @@ class Adapter:
         return [str(arg) for arg in (cfg.get("extra_args") or [])]
 
 
+#: What the dashboard calls each tool while the model is using it. Anything not
+#: listed falls back to the tool's own name, so a new one degrades to a slightly
+#: uglier note rather than to nothing.
+CLAUDE_TOOL_VERBS = {
+    "Read": "reading",
+    "Grep": "searching",
+    "Glob": "looking for",
+    "ReadManyFiles": "reading",
+}
+
+
+def _json_line(line: str) -> dict[str, Any] | None:
+    """One line as a JSON object, or None if it is not one."""
+    line = line.strip()
+    if not line.startswith("{"):
+        return None
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return event if isinstance(event, dict) else None
+
+
+def _is_result(event: dict[str, Any]) -> bool:
+    kind = event.get("type")
+    # The second half is the single-object ``--output-format json`` envelope,
+    # which carries the same fields under no type at all on older releases.
+    return kind == "result" or (kind is None and "result" in event)
+
+
+def _final_result(stdout: str) -> dict[str, Any] | None:
+    """The stream's closing ``result`` event, looked for from the end.
+
+    Backwards, and stopped at the first hit, because of what the rest of the
+    stream contains: under stream-json every file the model read comes back as
+    a tool result with its contents inline, so a review of a large pull request
+    runs to megabytes. Parsing all of that to reach an event which is by
+    definition the last one would hold the whole review in memory twice over,
+    for nothing. The common case ends after one line.
+    """
+    for line in reversed(stdout.splitlines()):
+        event = _json_line(line)
+        if event is not None and _is_result(event):
+            return event
+    return None
+
+
+def _content_blocks(event: dict[str, Any]) -> list[dict[str, Any]]:
+    message = event.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, list):
+        return []
+    return [block for block in content if isinstance(block, dict)]
+
+
+def _assistant_text(event: dict[str, Any]) -> str:
+    parts = [
+        str(block.get("text") or "")
+        for block in _content_blocks(event)
+        if block.get("type") == "text"
+    ]
+    return "".join(parts).strip()
+
+
+def _last_assistant_text(stdout: str) -> str:
+    """The final thing the model said in its own voice, searched from the end.
+
+    Only ever wanted when the closing event is missing, which means the call was
+    cut short. Backwards for the same reason as ``_final_result``, and because
+    the most recent turn is the one worth keeping.
+    """
+    for line in reversed(stdout.splitlines()):
+        event = _json_line(line)
+        if event is None or event.get("type") != "assistant":
+            continue
+        text = _assistant_text(event)
+        if text:
+            return text
+    return ""
+
+
+def _error_detail(event: dict[str, Any]) -> str:
+    """The readable half of a failure event.
+
+    The whole event is a few hundred characters of session ids and token counts,
+    and printing it verbatim buries the one sentence that says what went wrong
+    under everything that did not.
+    """
+    for key in ("error", "result", "subtype"):
+        value = event.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:400]
+    return str(event)[:400]
+
+
 class ClaudeAdapter(Adapter):
     """Claude Code.
 
@@ -180,6 +294,14 @@ class ClaudeAdapter(Adapter):
     it is the only one here that can be handed an explicit tool allowlist *and*
     an explicit denylist, so "may read files, may not run anything" is a fact
     about the process rather than a hope about the model.
+
+    Run with ``--output-format stream-json``, which prints one JSON event per
+    line as the review happens rather than one object at the end. Two things
+    come of that. The dashboard can say what the model is doing right now
+    instead of spinning at it, and — the reason it is worth the extra parsing —
+    a call that has printed nothing for ten minutes becomes distinguishable from
+    one that is simply taking ten minutes. Total elapsed time cannot tell those
+    apart; silence can.
     """
 
     name = "claude"
@@ -201,7 +323,10 @@ class ClaudeAdapter(Adapter):
             self.command_name(cfg),
             "-p",
             "--output-format",
-            "json",
+            "stream-json",
+            # Required alongside stream-json under --print, and the reason this
+            # is not simply the old flag with a new value.
+            "--verbose",
             "--append-system-prompt",
             system_prompt,
         ]
@@ -216,25 +341,83 @@ class ClaudeAdapter(Adapter):
         command += self.extra(cfg)
         return Call(command=command, stdin=user_prompt)
 
+    def progress(self, line: str) -> str | None:
+        event = _json_line(line)
+        if event is None:
+            return None
+        kind = event.get("type")
+
+        if kind == "system" and event.get("subtype") == "init":
+            return "starting up"
+        if kind != "assistant":
+            # Tool results and the final result event say nothing a person
+            # watching a spinner wants to read.
+            return None
+
+        # Last block wins: by the time a turn is printed the interesting part is
+        # what it ended up doing, not what it said on the way there.
+        for block in reversed(_content_blocks(event)):
+            if block.get("type") == "tool_use":
+                return self._tool_note(block)
+            if block.get("type") == "text" and str(block.get("text") or "").strip():
+                return "writing the review"
+        return None
+
+    @staticmethod
+    def _tool_note(block: dict[str, Any]) -> str:
+        name = str(block.get("name") or "working")
+        verb = CLAUDE_TOOL_VERBS.get(name, name.lower())
+        args = block.get("input")
+        args = args if isinstance(args, dict) else {}
+        target = ""
+        for key in ("file_path", "pattern", "path", "query"):
+            value = args.get(key)
+            if isinstance(value, str) and value.strip():
+                target = value.strip()
+                break
+        if not target:
+            return verb
+        # The basename, because this lands in a fixed-width line beside a
+        # spinner and a full repository path would push everything else off it.
+        return f"{verb} {target.rsplit('/', 1)[-1]}"[:60]
+
     def read(self, call: Call, stdout: str) -> Reply:
-        # ``--output-format json`` wraps the reply; older CLI versions print the
-        # text directly. Handle both rather than pinning to one CLI release.
-        try:
-            envelope = json.loads(stdout)
-        except json.JSONDecodeError:
-            return Reply(text=stdout)
+        # stream-json ends with a "result" event carrying the answer and the
+        # token counts. ``--output-format json`` — an older CLI, or anyone who
+        # has put it back in extra_args — prints that same object on its own,
+        # and older versions still print bare text. All three land here, because
+        # these flags drift between releases faster than this file can.
+        result = _final_result(stdout)
 
-        if not isinstance(envelope, dict):
-            return Reply(text=stdout)
-        if envelope.get("is_error"):
-            raise ProviderError(f"claude reported an error: {str(envelope)[:400]}")
+        if result is None:
+            # No closing event: the call was cut short, or this is not a stream
+            # at all but a pretty-printed object. Only here — the path that has
+            # already failed — is it worth reading the whole thing to salvage
+            # the last thing the model actually said.
+            fallback = _last_assistant_text(stdout)
+            try:
+                parsed = json.loads(stdout)
+            except json.JSONDecodeError:
+                return Reply(text=fallback or stdout)
+            if not isinstance(parsed, dict):
+                return Reply(text=fallback or stdout)
+            result = parsed
 
-        usage = dict(envelope.get("usage") or {})
+        if result.get("is_error"):
+            raise ProviderError(f"claude reported an error: {_error_detail(result)}")
+
+        usage = dict(result.get("usage") or {})
         for key in ("total_cost_usd", "num_turns", "duration_ms"):
-            if key in envelope:
-                usage[key] = envelope[key]
+            if key in result:
+                usage[key] = result[key]
 
-        body = envelope["result"] if isinstance(envelope.get("result"), str) else stdout
+        body = result["result"] if isinstance(result.get("result"), str) else ""
+        # Never fall back to raw stdout here the way the other adapters can:
+        # under stream-json that is a wall of JSONL, and handing it to the JSON
+        # extractor would turn a recoverable hiccup into a parse failure. The
+        # last thing the model actually said is a far better guess.
+        if not body.strip():
+            body = _last_assistant_text(stdout) or stdout
         return Reply(text=body, usage=usage)
 
 

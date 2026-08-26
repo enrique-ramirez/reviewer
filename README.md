@@ -61,6 +61,72 @@ git clone <this repo> && cd blinky
 Then open `personality/` and make it sound like you. That is the part worth your
 time; everything else already has a sensible default.
 
+## The token
+
+`./run.sh --init` asks for one and writes `.env`; if you would rather do it by
+hand, copy [`config/.env.sample`](config/.env.sample) to `.env` at the repo root
+and fill in `GITHUB_TOKEN`. Either way the token itself comes from
+<https://github.com/settings/personal-access-tokens> → **Generate new token**.
+
+Make it a **fine-grained** token, not a classic one:
+
+- **Resource owner** — your own account for personal repositories, or the
+  organisation that owns them. Choosing an organisation means an owner has to
+  approve the token before it works, and it stays inert until they do.
+- **Repository access** — *Only select repositories*, and pick exactly the ones
+  you list in `config/repos/`.
+- **Repository permissions** —
+
+  | | |
+  |---|---|
+  | Contents | **Read-only** |
+  | Pull requests | **Read and write** |
+  | Commit statuses | **Read-only** |
+  | Actions | **Read-only** |
+  | Metadata | Read-only (mandatory, selected for you) |
+
+`Pull requests: Read and write` is the minimum that allows posting reviews,
+replying to threads and resolving conversations. It is also all that is needed to
+read whether a pull request has been approved — that comes back on the pull
+request itself, and no separate permission covers it.
+
+`Contents: Read-only` is the load-bearing part: with it, this tool cannot push a
+commit, create a branch, or merge anything, whatever else goes wrong.
+
+`Commit statuses` and `Actions` are how it sees whether CI is green — see below
+for why it takes two of them. Finish by running `./run.sh --check`, which probes
+every permission one at a time and names the exact one behind any failure.
+
+### Why there is no `Checks` permission to tick
+
+The permission that actually covers CI results is `Checks`, and GitHub does not
+offer it on fine-grained tokens — it exists only for GitHub Apps. That is a
+deliberate restriction, not something waiting on an organisation owner to
+approve, and it is
+[not reflected in their docs](https://github.com/orgs/community/discussions/179545),
+which is why every guide tells you to tick a box that is not there.
+
+Without it GitHub refuses the `statusCheckRollup` field, so the reviewer falls
+back to reading CI a coarser way, and neither fallback is complete:
+
+- **Actions: Read-only** covers everything running in GitHub Actions, but not a
+  check posted by a third-party App.
+- **Commit statuses: Read-only** covers integrations that post statuses, and
+  *not* Actions check runs.
+
+`./run.sh --check` reports which fallbacks your token can reach, how many
+workflows or statuses each one actually sees, and the `"gates": { "ci_source":
+... }` line to put in the repo config. Compare its counts against what the pull
+request page shows before trusting one. If neither reaches anything, the honest
+options are `"gates": { "require_ci_green": false }` — the reviewer will then
+review pull requests whose builds are red — or a classic PAT with the `repo`
+scope, which can read check runs but also grants write access to code and so
+gives up the guarantee that this tool cannot push.
+
+`Code quality` is unrelated, despite sounding like the one you want: it reads
+findings from GitHub's paid Code Quality product and says nothing about CI or
+about approvals. Leave it off.
+
 ## What it will not do
 
 The token is `Contents: Read-only`, so it cannot push a commit, create a branch,

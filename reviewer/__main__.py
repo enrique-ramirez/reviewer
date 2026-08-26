@@ -18,6 +18,7 @@ from typing import Any
 
 from . import (
     backfill,
+    clock,
     conversation,
     identity,
     log,
@@ -186,12 +187,25 @@ def run_tick(
 ) -> TickResult:
     total = TickResult()
     budget = global_cfg.max_reviews_per_tick
+    # Across every repository, not per repository: reviews run one at a time, so
+    # the repositories at the end of the list are the ones a slow pass starves,
+    # and a per-repo clock would never notice. Awake seconds, so a laptop that
+    # slept through the afternoon does not come back to a pass that has already
+    # spent its whole budget. See ``clock``.
+    deadline = clock.Deadline(global_cfg.max_tick_seconds)
 
     for cfg in repos:
         if only_repo and cfg.repo.lower() != only_repo.lower():
             continue
         if budget <= 0:
             log.get().info("per-tick review budget spent; remaining repos wait")
+            break
+        if deadline.expired():
+            log.get().info(
+                "pass has run %.0fm; leaving the remaining repositories for the "
+                "next one",
+                deadline.awake_elapsed() / 60,
+            )
             break
         if _stop:
             break
@@ -215,7 +229,7 @@ def run_tick(
             status_cb=status_cb,
         )
 
-        result = reviewer.tick(budget=budget, only_pr=only_pr)
+        result = reviewer.tick(budget=budget, deadline=deadline, only_pr=only_pr)
         budget -= result.reviewed
         total.reviewed += result.reviewed
         total.skipped += result.skipped

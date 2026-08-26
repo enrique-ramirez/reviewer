@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import (
+    clock,
     diff,
     gates,
     log,
@@ -24,6 +25,7 @@ from . import (
     prompt,
     publish,
     render,
+    state,
     summarize,
     threads,
     tokens,
@@ -121,7 +123,20 @@ class Reviewer:
 
     # ------------------------------------------------------------------ tick
 
-    def tick(self, *, budget: int, only_pr: int | None = None) -> TickResult:
+    def tick(
+        self,
+        *,
+        budget: int,
+        deadline: clock.Deadline | None = None,
+        only_pr: int | None = None,
+    ) -> TickResult:
+        """One repository's pass.
+
+        ``deadline`` is the whole tick's time budget, shared with every other
+        repository in the pass, and is consulted before starting each review
+        rather than during one. Optional so that a caller reviewing a single
+        pull request by hand does not have to invent one.
+        """
         result = TickResult()
 
         # Nothing can legitimately be under review as a tick begins, so whatever
@@ -195,6 +210,16 @@ class Reviewer:
                 log.get().info(
                     "%s: hit the per-tick review budget, leaving the rest for next time",
                     self.cfg.repo,
+                )
+                break
+            # Checked between reviews, never inside one: a review that has
+            # already been paid for is always worth finishing, and the point of
+            # this is to stop the queue growing rather than to cut anything off.
+            if deadline is not None and deadline.expired():
+                log.get().info(
+                    "%s: pass has run %.0fm, leaving the rest for next time",
+                    self.cfg.repo,
+                    deadline.awake_elapsed() / 60,
                 )
                 break
             number = pull.get("number")
@@ -663,6 +688,7 @@ class Reviewer:
                     repo_context=repo_context,
                     pr_state_round=pr_state.review_round + 1,
                     discussion=discussion,
+                    since_sha=pr_state.last_reviewed_head_sha,
                 )
 
             self.store.record_comment_scan(cfg.repo, number, newest_comment_id)
@@ -811,6 +837,62 @@ class Reviewer:
 
     # -------------------------------------------------------- the main pass
 
+    def _files_for_review(
+        self,
+        number: int,
+        since_sha: str | None,
+        head_sha: str,
+        round_number: int,
+    ) -> tuple[list[dict[str, Any]] | None, str | None]:
+        """The file list this round should read.
+
+        Round one reads the whole pull request. Later rounds read only what
+        arrived since the last review, which is the single biggest thing keeping
+        a long-running pull request from collecting a fresh set of findings every
+        time somebody pushes.
+
+        Returns ``(files, reviewed_since)``. ``reviewed_since`` is the SHA the
+        diff is measured from, or ``None`` when this is a full read — the prompt
+        uses it to tell the model which of the two it is looking at. ``files`` of
+        ``None`` means the push contained nothing that belongs to this pull
+        request, so there is nothing to review.
+        """
+        cfg = self.cfg
+        pr_files = self.rest.list_pull_files(cfg.owner, cfg.name, number)
+
+        policy = cfg.review.get("rounds") or {}
+        if not policy.get("incremental_after_first", True):
+            return pr_files, None
+        if round_number <= 1 or not since_sha or since_sha == head_sha:
+            return pr_files, None
+
+        changed = self.rest.compare_commits(cfg.owner, cfg.name, since_sha, head_sha)
+        if changed is None:
+            # Force-push, orphaned SHA, unreadable compare. Reviewing the whole
+            # thing again is worse than reviewing the delta and better than
+            # reviewing nothing.
+            return pr_files, None
+
+        # A merge from the base branch shows up in the compare as files the
+        # author never touched. Intersecting with the pull request's own file
+        # list drops those without needing to reason about merge bases.
+        pr_paths = {f.get("filename") for f in pr_files}
+        incremental = [f for f in changed if f.get("filename") in pr_paths]
+
+        if not incremental:
+            return None, since_sha
+
+        log.get().info(
+            "%s#%s round %d: reviewing %d file(s) changed since %s, not all %d",
+            cfg.repo,
+            number,
+            round_number,
+            len(incremental),
+            since_sha[:8],
+            len(pr_files),
+        )
+        return incremental, since_sha
+
     def _full_review(
         self,
         *,
@@ -819,6 +901,7 @@ class Reviewer:
         repo_context: dict[str, str] | None,
         pr_state_round: int,
         discussion: list[dict[str, Any]],
+        since_sha: str | None = None,
     ) -> bool:
         cfg = self.cfg
         number = snapshot.number
@@ -826,7 +909,18 @@ class Reviewer:
         pull = self.rest.get_pull(cfg.owner, cfg.name, number)
         pr_body = pull.get("body") or ""
 
-        files = self.rest.list_pull_files(cfg.owner, cfg.name, number)
+        files, reviewed_since = self._files_for_review(
+            number, since_sha, snapshot.head_sha, pr_state_round
+        )
+        if files is None:
+            log.get().info(
+                "%s#%s: no new code since %s, nothing to review this round",
+                cfg.repo,
+                number,
+                (since_sha or "")[:8],
+            )
+            return False
+
         bundle = diff.build(files, cfg.diff)
 
         if not bundle.has_content():
@@ -851,6 +945,8 @@ class Reviewer:
             checkout_path=checkout_path,
             round_number=pr_state_round,
             axes=axes,
+            reviewed_since=reviewed_since,
+            severities_allowed=publish.severities_allowed(cfg, pr_state_round),
         )
 
         self.debug.write(cfg.repo, number, "system-prompt.md", system)
@@ -870,6 +966,10 @@ class Reviewer:
                     checkout_path=checkout_path,
                     round_number=pr_state_round,
                     axes=[axis],
+                    reviewed_since=reviewed_since,
+                    severities_allowed=publish.severities_allowed(
+                        cfg, pr_state_round
+                    ),
                 )
                 payloads.append(
                     self._call_model(system, single, checkout_path, number, axis, spend)
@@ -892,7 +992,31 @@ class Reviewer:
         if not payloads or all(p is None for p in payloads):
             return False
 
+        # The prompt asks for this restraint and the model usually obeys it. This
+        # is the backstop that makes it a fact rather than a request.
+        findings, held_back = publish.filter_by_round(findings, cfg, pr_state_round)
+        if held_back:
+            log.get().info(
+                "%s#%s round %d: holding back %d finding(s) below the round's bar (%s)",
+                cfg.repo,
+                number,
+                pr_state_round,
+                len(held_back),
+                ", ".join(sorted({f.severity for f in held_back})),
+            )
+
         summary_text = "\n\n".join(summaries)
+        if held_back:
+            # The summary was written before the filter ran, so it may point at
+            # comments that are no longer there. One line fixes that without
+            # reprinting the content we just decided was not worth the round.
+            summary_text += (
+                f"\n\n_{len(held_back)} smaller point"
+                f"{'s' if len(held_back) > 1 else ''} held back — this is round "
+                f"{pr_state_round}, and they are below the bar for a repeat "
+                "review. Ask if you want them._"
+            )
+
         return self._publish(
             snapshot=snapshot,
             bundle=bundle,
@@ -916,6 +1040,8 @@ class Reviewer:
                 system_prompt=system,
                 user_prompt=user,
                 add_dir=checkout_path,
+                label=f"{self.cfg.repo}#{number}",
+                on_progress=state.heartbeat(self.store, self.cfg.repo, number),
             )
         except model.ModelError as exc:
             if model.cancelled():

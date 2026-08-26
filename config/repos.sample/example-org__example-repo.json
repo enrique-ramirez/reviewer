@@ -220,11 +220,62 @@
 
     "max_disagreement_rounds_per_thread": 3,
     "$comment_disagreement": [
-      "Counted per thread, not per PR. Review rounds themselves are uncapped —",
-      "a PR can go fifteen rounds. What is capped is one thread ping-ponging.",
-      "At the cap that single thread goes quiet and you get a notification;",
-      "every other thread and every later round carries on."
-    ]
+      "Counted per thread, not per PR. What is capped here is one thread",
+      "ping-ponging. At the cap that single thread goes quiet and you get a",
+      "notification; every other thread carries on. How many times the PR as a",
+      "whole gets reviewed is 'rounds' below, which is a different question."
+    ],
+
+    "rounds": {
+      "$comment": [
+        "What a REPEAT review of the same PR may do. These defaults exist",
+        "because without them a long-running PR collects a fresh set of findings",
+        "every time anyone pushes: three good findings a round, nine rounds, and",
+        "the author is answering 27 comments on a change that had no blocker in",
+        "it. Each review was fine. The accumulation was not.",
+        "",
+        "Round 1 is always a full review at the normal bar; none of these apply."
+      ],
+
+      "incremental_after_first": true,
+      "$comment_incremental": [
+        "From round 2, send only what changed since the last review instead of",
+        "the whole PR again. This is the big one — a reviewer handed the same",
+        "1,800 lines a ninth time will always find something new to say about",
+        "them, and none of it is what the author pushed for.",
+        "Falls back to the full diff when the delta cannot be worked out (a",
+        "force-push that orphaned the old SHA, mainly)."
+      ],
+
+      "nits_until_round": 1,
+      "$comment_nits": [
+        "Last round on which 'nit' and 'note' findings get posted. After this",
+        "only 'correctness' and 'blocker' do.",
+        "Worth being ruthless here when your authors are coding agents: an agent",
+        "fixes a nit as dutifully as a blocker, and every fix is another push,",
+        "another review round, and another set of comments. A nit that costs a",
+        "human ten seconds to decline costs an agent-authored PR a whole round.",
+        "null disables the rule."
+      ],
+
+      "blockers_only_from_round": 4,
+      "$comment_blockers_only": [
+        "From this round on, only findings that actually hold up a merge get",
+        "posted. Everything else is dropped — not moved to the summary, dropped,",
+        "because the point is silence.",
+        "A PR that has been round four times has had your input. What it needs",
+        "now is either a reason it cannot merge or an approval.",
+        "null disables the rule."
+      ],
+
+      "max_rounds": null,
+      "$comment_max_rounds": [
+        "Hard stop: after this many rounds, stop reviewing the PR at all and",
+        "leave it to a human. Asking for a re-review explicitly still overrides",
+        "it. null means no limit, which is fine once the rules above are doing",
+        "their job — reach for this only if a PR is still somehow spinning."
+      ]
+    }
   },
 
   "approval": {

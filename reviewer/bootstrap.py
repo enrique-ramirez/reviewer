@@ -86,7 +86,7 @@ def _ask_token(paths: Paths) -> bool:
 
     _say("  A fine-grained token, with these permissions on the repos you list:")
     _say("    Contents Read-only · Pull requests Read and write")
-    _say("    Checks Read-only · Commit statuses Read-only")
+    _say("    Commit statuses Read-only · Actions Read-only")
     _say(f"    Create one at {TOKEN_URL}")
     _say()
     token = _ask("Paste the token (or leave blank to fill it in later):")

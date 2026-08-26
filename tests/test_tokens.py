@@ -87,12 +87,14 @@ class Wiring(unittest.TestCase):
     def _reviewer(self, *, dry_run: bool):
         from reviewer import pipeline
 
-        # Only the four attributes _call_model touches; building a real
-        # Reviewer would need a token, a database and a GitHub client to test
-        # one logging branch.
+        # Only the attributes _call_model touches; building a real Reviewer
+        # would need a token, a database and a GitHub client to test one
+        # logging branch. The store is here for the heartbeat callback, which
+        # this test never fires because model.run is mocked out.
         reviewer = object.__new__(pipeline.Reviewer)
         reviewer.dry_run = dry_run
         reviewer.debug = SimpleNamespace(write=lambda *a, **k: None)
+        reviewer.store = SimpleNamespace(beat_active=lambda *a, **k: None)
         reviewer.cfg = SimpleNamespace(repo="acme/widgets", model={})
         reviewer.global_cfg = SimpleNamespace(
             provider_for=lambda _repo: {"type": "claude"}

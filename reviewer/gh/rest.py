@@ -250,6 +250,44 @@ class RestClient:
             self.paginate(f"/repos/{owner}/{repo}/pulls/{number}/files", cap=30)
         )
 
+    def compare_commits(
+        self, owner: str, repo: str, base: str, head: str
+    ) -> list[dict[str, Any]] | None:
+        """Files that changed between two commits, or ``None`` if we cannot tell.
+
+        Used to review only what arrived since the last round instead of the
+        whole pull request again. The three-dot form is deliberate: it diffs
+        ``head`` against the merge base, so a base branch that has moved on does
+        not show up as changes the author made.
+
+        ``None`` means "no usable answer" — a force-push that orphaned the old
+        SHA, a repository we cannot reach, anything at all. Every caller treats
+        that as "review the whole pull request", which is the safe direction to
+        fail in.
+        """
+        try:
+            payload = self.get(
+                f"/repos/{owner}/{repo}/compare/{base}...{head}", use_cache=False
+            )
+        except GitHubError as exc:
+            log.get().info(
+                "cannot compare %s...%s in %s/%s (%s) — falling back to the full diff",
+                base[:8],
+                head[:8],
+                owner,
+                repo,
+                exc,
+            )
+            return None
+        if not isinstance(payload, dict):
+            return None
+        files = payload.get("files")
+        if not isinstance(files, list):
+            # A compare with no file list is not an empty compare — it is an
+            # answer we cannot read. Fall back rather than review nothing.
+            return None
+        return [f for f in files if isinstance(f, dict)]
+
     def list_issue_comments(
         self, owner: str, repo: str, number: int
     ) -> list[dict[str, Any]]:

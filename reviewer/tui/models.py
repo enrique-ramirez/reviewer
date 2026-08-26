@@ -32,6 +32,19 @@ def _epoch(row: Row, key: str) -> float | None:
         return None
 
 
+def _seconds(row: Row, key: str) -> float:
+    """A duration from the database, defaulting to zero rather than to None.
+
+    A missing count means "nothing to report" everywhere this is used, and zero
+    says that without every caller having to check.
+    """
+    value = row.get(key)
+    try:
+        return max(0.0, float(value)) if value else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _strings(row: Row, key: str) -> tuple[str, ...]:
     value = row.get(key)
     if not isinstance(value, list):
@@ -54,12 +67,35 @@ def owner_of(repo: str) -> str:
     return owner
 
 
+#: Silence past this is worth pointing out.
+#:
+#: Set by the longest thing that is legitimately silent rather than by how soon
+#: anyone would like to know. Under stream-json an event arrives per turn, not
+#: per token, so the final write-up — one turn, tens of thousands of tokens —
+#: produces nothing at all for as long as it takes to generate. Ten minutes sits
+#: above that and still well below the point at which a person would have given
+#: up on their own.
+#:
+#: Tightening this means asking the CLI for partial messages, which would stream
+#: token by token and make silence mean silence. That is a real option and not a
+#: free one: it is an event per token to parse and discard on every review.
+STALLED_AFTER = 600.0
+
+
 @dataclass(frozen=True, slots=True)
 class Activity:
     """Work the reviewer is doing on a pull request right now."""
 
     phase: str
     started_at: float | None = None
+    #: When the call last checked in. None from a build that did not report one.
+    heartbeat_at: float | None = None
+    #: How much of the elapsed time the machine spent asleep.
+    slept_seconds: float = 0.0
+    #: How long the model has gone without printing anything, awake seconds.
+    silent_seconds: float = 0.0
+    #: What it was last seen doing, when the provider streams enough to say.
+    note: str = ""
 
     @property
     def is_replying(self) -> bool:
@@ -69,11 +105,30 @@ class Activity:
         """Seconds spent so far. Zero when an older build recorded no start."""
         return max(0.0, now - self.started_at) if self.started_at else 0.0
 
+    @property
+    def is_stalled(self) -> bool:
+        """Whether this has gone quiet for long enough to be worth saying.
+
+        Silence, not elapsed time: a review that has run for twenty minutes and
+        spoke four seconds ago is working, and one that has said nothing for
+        twenty minutes is the thing you actually want to hear about. Providers
+        that do not stream never report silence, so they never look stalled —
+        which is honest, since there is nothing to go on.
+        """
+        return self.silent_seconds >= STALLED_AFTER
+
     @classmethod
     def from_row(cls, row: Row | None) -> "Activity | None":
         if not row or not row.get("phase"):
             return None
-        return cls(phase=str(row["phase"]), started_at=_epoch(row, "started_at"))
+        return cls(
+            phase=str(row["phase"]),
+            started_at=_epoch(row, "started_at"),
+            heartbeat_at=_epoch(row, "heartbeat_at"),
+            slept_seconds=_seconds(row, "slept_seconds"),
+            silent_seconds=_seconds(row, "silent_seconds"),
+            note=str(row.get("note") or ""),
+        )
 
 
 @dataclass(frozen=True, slots=True)
