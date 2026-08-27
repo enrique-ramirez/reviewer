@@ -139,6 +139,19 @@ class Runtime:
     stop: threading.Event
     status: Callable[[], Mapping[str, Any]]
     started_at: float
+    wake: threading.Event | None = None
+    """Set to cut the wait short and start the next scan now.
+
+    None when nothing is watching it — ``--lean`` has no interface to press the
+    key, and a test builds a runtime without a worker behind it.
+    """
+    pause: threading.Event | None = None
+    """Set to stop starting scans on the timer.
+
+    It holds the countdown; it does not touch a pass that is already running.
+    Stopping a review in flight is a different and much more destructive thing,
+    and it has its own key.
+    """
     backfiller: backfill.Runner | None = None
     summariser: summarize.Runner | None = None
     conversations: conversation.Runner | None = None
@@ -158,7 +171,6 @@ class Dashboard(App[None]):
         Binding("s", f"show_tab('{SUMMARY}')", "Summary", show=False),
         Binding("h", f"show_tab('{HISTORY}')", "History", show=False),
         Binding("enter,o", "open", "Open in browser"),
-        Binding("a", "toggle_filter", "Only needs me"),
         Binding("slash", "author_filter", "Filter author", key_display="/"),
         Binding("t", "cycle_window", "Date range"),
         Binding("e", "focus_repos", "Repos"),
@@ -168,7 +180,8 @@ class Dashboard(App[None]):
         Binding("c", "conversation", "Read the review"),
         Binding("x", "stop_review", "Stop review", show=False),
         Binding("l", "toggle_log", "Log"),
-        Binding("r", "reload", "Refresh"),
+        Binding("r", "reload", "Scan now"),
+        Binding("p", "pause", "Pause"),
         # Shown, not hidden: the footer is the only place the keys are listed
         # now, and a paging key nobody can find is a history nobody can read.
         Binding("left_square_bracket,pageup", "page_back", "Prev page",
@@ -183,7 +196,6 @@ class Dashboard(App[None]):
     # everywhere. Summary has none of its own: it shows this run and nothing
     # else, which is the whole point of it.
     TAB_ACTIONS = {
-        "toggle_filter": DASHBOARD,
         "author_filter": HISTORY,
         "cycle_window": HISTORY,
         "page_back": HISTORY,
@@ -404,7 +416,7 @@ class Dashboard(App[None]):
         recounts the tab in one go.
         """
         self.title = f"{theme.GHOST} {NAME}: {self.session.scope_label}"
-        self.sub_title = board_view.subtitle(self.pull_requests, self.session)
+        self.sub_title = board_view.subtitle(self.pull_requests)
         label = tab_label("Dashboard", len(self.pull_requests))
         try:
             tab = self.query_one(TabbedContent).get_tab(DASHBOARD)
@@ -489,18 +501,66 @@ class Dashboard(App[None]):
     # ------------------------------------------------------------- actions
 
     def action_reload(self) -> None:
+        """Redraw from the database, and ask for the next scan now.
+
+        The redraw on its own was the whole of this key, and on a quiet board it
+        looked broken: everything it reads was already on screen a second ago,
+        so pressing it changed nothing visible. What people reach for this key
+        expecting is a scan, so it asks for one — and says so, because the work
+        happens on another thread and the first sign of it is a log line a
+        moment later.
+        """
         self.reload()
+
+        wake = self.runtime.wake
+        if wake is None:
+            self.notify("refreshed from the database", timeout=2)
+            return
+
+        status = self.runtime.status()
+        phase = str(status.get("phase") or "")
+        # Paused counts as idle: asking for one scan by hand is exactly what the
+        # key is for while the timer is off, and it leaves the pause alone.
+        if phase != "waiting" and not status.get("paused"):
+            # A pass is already running. Setting the event would queue another
+            # one the moment this finishes, which is not what the key means.
+            self.notify(f"already running — {phase}", timeout=3)
+            return
+
+        wake.set()
+        self.notify("scanning now…", timeout=2)
+
+    def action_pause(self) -> None:
+        """Hold the countdown, or let it run again.
+
+        Pausing stops the *timer*, not the work: a pass already under way runs
+        to the end, because abandoning a review halfway is a much bigger thing
+        than skipping the next one and there is a separate key for it.
+
+        Asking for a scan still works while paused. The two compose — pause is
+        the standing setting, `r` is a one-off — and a scan you asked for by
+        hand leaves the pause where it was.
+        """
+        if self.typing:
+            return
+
+        pause = self.runtime.pause
+        if pause is None:
+            self.notify("nothing to pause — no scan loop is running", timeout=3)
+            return
+
+        if pause.is_set():
+            pause.clear()
+            self.notify("scanning again", timeout=2)
+        else:
+            pause.set()
+            self.notify("paused — press p to start again", timeout=3)
+        self.refresh_bindings()
 
     def action_show_tab(self, tab: str) -> None:
         if not self.typing:
             self.query_one(TabbedContent).active = tab
             self.view_for(tab).table.focus()
-
-    def action_toggle_filter(self) -> None:
-        if self.typing or self.tab != DASHBOARD:
-            return
-        self.session = self.session.with_attention_only(not self.session.only_attention)
-        self._reload_board(time.time())
 
     @on(Button.Pressed, ".action")
     def _action_button(self, event: Button.Pressed) -> None:

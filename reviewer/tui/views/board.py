@@ -34,15 +34,13 @@ def in_view(
     """The scoped, filtered, most-urgent-first order the board is read in."""
     scope = set(session.scope)
     chosen = [pr for pr in pull_requests if pr.repo in scope]
-    if session.only_attention:
-        chosen = [pr for pr in chosen if status.attention(pr)]
     return tuple(sorted(chosen, key=lambda pr: (status.rank(pr), -pr.number)))
 
 
 def attention_by_repo(pull_requests: Sequence[PullRequest]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for pull_request in pull_requests:
-        if status.attention(pull_request):
+        if status.wants_you(pull_request):
             counts[pull_request.repo] = counts.get(pull_request.repo, 0) + 1
     return counts
 
@@ -56,18 +54,15 @@ def longest_running(pull_requests: Sequence[PullRequest], now: float) -> float:
     return max(spans, default=0.0)
 
 
-def subtitle(pull_requests: Sequence[PullRequest], session: Session) -> str:
+def subtitle(pull_requests: Sequence[PullRequest]) -> str:
     """What the header adds after the title.
 
     Not how many are open — that is on the Dashboard tab, which is the thing it
     is true of. What is left is the part a title should carry: whether any of
     them want you.
     """
-    flagged = sum(1 for pr in pull_requests if status.attention(pr))
-    parts = [f"{flagged} need you"] if flagged else []
-    if session.only_attention:
-        parts.append("filtered")
-    return " · ".join(parts)
+    flagged = sum(1 for pr in pull_requests if status.wants_you(pr))
+    return f"{flagged} need you" if flagged else ""
 
 
 def work_in_flight(pull_requests: Sequence[PullRequest], now: float) -> tuple[Text, ...]:
@@ -88,12 +83,47 @@ def work_in_flight(pull_requests: Sequence[PullRequest], now: float) -> tuple[Te
     )
 
 
-def legend() -> Text:
+def _legend_text(flags: Sequence[theme.Flag], hidden: int) -> Text:
     text = Text("  ")
-    for flag in theme.FLAGS:
+    for position, flag in enumerate(flags):
+        if position:
+            text.append("   ")
         text.append(flag.glyph, style=flag.style)
-        text.append(f" {flag.label}   ", style=theme.MUTED)
+        text.append(f" {flag.label}", style=theme.MUTED)
+    if hidden:
+        text.append(f"   +{hidden} more", style=theme.MUTED)
     return text
+
+
+def legend(pull_requests: Sequence[PullRequest] = (), width: int = 0) -> Text:
+    """A key to the marks that are actually on the board right now.
+
+    Two things it is not. It is not a catalogue of every mark the tool can
+    produce — explaining symbols that are not on screen crowds out the ones that
+    are. And it is not allowed to overflow: the bar is one line, so a legend
+    wider than the pane used to be cut wherever the pane ended, which is how you
+    get "? needs your" and no idea what it needs.
+
+    So: only the flags in use, most urgent first, and if even those do not fit,
+    the least urgent are dropped for a count of what is missing.
+    """
+    present = {flag for pr in pull_requests if (flag := status.attention(pr))}
+    flags = [flag for flag in theme.FLAGS if flag in present]
+    if not flags:
+        return Text()
+
+    shown = list(flags)
+    while True:
+        text = _legend_text(shown, len(flags) - len(shown))
+        if not width or text.cell_len <= width:
+            return text
+        if len(shown) == 1:
+            # Narrower than a single entry. An ellipsis is the difference
+            # between a phrase that reads as finished and one that admits it
+            # was cut — which is the whole complaint this function answers.
+            text.truncate(width, overflow="ellipsis")
+            return text
+        shown.pop()
 
 
 def live_status(pull_request: PullRequest, now: float, frame: int) -> str:
@@ -187,9 +217,13 @@ def _flag_lines(pull_request: PullRequest) -> Text | None:
     flag = status.attention(pull_request)
     if flag is None:
         return None
+    # Both of these are "a human has to sign this off" — the difference is
+    # whether that is now or later, and either way the reason is what makes the
+    # mark actionable rather than mysterious.
+    holds_for_a_human = flag in (theme.APPROVAL, theme.HELD)
     reason = (
-        prose.line(f"   {pull_request.needs_human_reason}", theme.NEEDS_YOU)
-        if flag is theme.APPROVAL and pull_request.needs_human_reason
+        prose.line(f"   {pull_request.needs_human_reason}", flag.style)
+        if holds_for_a_human and pull_request.needs_human_reason
         else None
     )
     return prose.join(
@@ -378,5 +412,5 @@ class BoardView(RecordView):
     def empty_text(self) -> Text:
         return prose.span("waiting for the first scan…", theme.MUTED)
 
-    def status_text(self) -> Text:
-        return legend()
+    def status_text(self, *, width: int = 0) -> Text:
+        return legend(self.records, width)

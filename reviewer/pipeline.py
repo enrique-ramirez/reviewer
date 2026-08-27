@@ -544,7 +544,15 @@ class Reviewer:
         ]
 
         ci_state, _ = gates.ci_status(snapshot, cfg)
-        needs_human, reason = gates.needs_manual_approval(snapshot, cfg, [])
+
+        # The paths matter: approval.manual_only_when.touches_paths is the rule
+        # most people actually use, and passing an empty list here meant it could
+        # never fire on a scan. A repository whose only manual-approval rule is
+        # touches_paths would show every pull request as needing nobody, right up
+        # until the review finished and discovered otherwise.
+        needs_human, reason = gates.needs_manual_approval(
+            snapshot, cfg, self._changed_paths(snapshot.number)
+        )
 
         row: dict[str, Any] = {
             "repo": cfg.repo,
@@ -663,12 +671,24 @@ class Reviewer:
                     self.store.record_comment_scan(cfg.repo, number, newest_comment_id)
                     return True
 
+                # An explicit re-review request is a person asking for another
+                # look at code that has not changed, which is exactly what the
+                # guard below exists to prevent. Theirs is the deciding vote:
+                # without this, a pull request whose comments are all resolved
+                # but which never got an approval can never get one, because
+                # every re-request is refused for the same SHA it is about.
+                # GitHub drops us from the requested-reviewer list the moment we
+                # submit, so this cannot loop.
+                asked_for_again = decision.trigger == "review_requested"
+
                 # Cheap guard before the expensive part: if a review for this
                 # exact commit already went out, do not pay for another one.
                 # Catches the crash-after-posting case, where the gate above
                 # cannot know.
-                if not self.force and self.store.already_posted(
-                    cfg.repo, number, snapshot.head_sha
+                if (
+                    not self.force
+                    and not asked_for_again
+                    and self.store.already_posted(cfg.repo, number, snapshot.head_sha)
                 ):
                     log.get().info(
                         "%s#%s: a review for %s already went out; not repeating it",
@@ -689,6 +709,7 @@ class Reviewer:
                     pr_state_round=pr_state.review_round + 1,
                     discussion=discussion,
                     since_sha=pr_state.last_reviewed_head_sha,
+                    allow_repost=asked_for_again,
                 )
 
             self.store.record_comment_scan(cfg.repo, number, newest_comment_id)
@@ -902,6 +923,7 @@ class Reviewer:
         pr_state_round: int,
         discussion: list[dict[str, Any]],
         since_sha: str | None = None,
+        allow_repost: bool = False,
     ) -> bool:
         cfg = self.cfg
         number = snapshot.number
@@ -1023,6 +1045,7 @@ class Reviewer:
             findings=findings,
             summary_text=summary_text,
             spend=spend,
+            allow_repost=allow_repost,
         )
 
     def _call_model(
@@ -1116,6 +1139,7 @@ class Reviewer:
         findings: list[render.Finding],
         summary_text: str,
         spend: model.Spend | None = None,
+        allow_repost: bool = False,
     ) -> bool:
         cfg = self.cfg
         number = snapshot.number
@@ -1163,7 +1187,7 @@ class Reviewer:
             body += publish.unplaceable_section(placed.unplaceable)
 
         claimed = self.store.begin_post(cfg.repo, number, head_sha, "review")
-        if not claimed and not self.force:
+        if not claimed and not self.force and not allow_repost:
             log.get().info(
                 "%s#%s: a review for %s was already posted, not repeating it",
                 cfg.repo,

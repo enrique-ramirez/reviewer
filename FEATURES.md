@@ -140,9 +140,9 @@ thing meant the one you could read was the one that was out of date.
 | `o` / `Enter` | any | open the selected pull request in your browser |
 | `j` / `k` | any | move |
 | `l` | any | hide/show the log pane |
-| `r` | any | refresh now |
+| `r` | any | scan now — cuts the wait short and starts the next pass |
+| `p` | any | pause the countdown, and let it go again |
 | `q` | any | quit — it asks first, and says what it is about to throw away |
-| `a` | Dashboard | show only what needs you |
 | `/` | History | filter by author |
 | `t` | History | open the date-range picker |
 | `[` `]` / `PgUp` `PgDn` | History | turn the page |
@@ -154,6 +154,25 @@ thing meant the one you could read was the one that was out of date.
 | `Escape` | History | clear the filters |
 | `e` | any | focus the repository sidebar (only with 2+ repos) |
 | `E` | any | fold the sidebar to a rail, and back |
+
+`r` does two things: redraws from the database, and asks the worker to stop
+waiting and start the next pass. The countdown in the header switches to
+`scanning…` straight away — the pass itself runs on another thread, so without
+that the key looked like it had done nothing on a board where nothing had
+changed. Pressed while a pass is already running it says so rather than queueing
+a second one.
+
+`p` holds the countdown where it is — the track keeps its place so you can see
+how much of the wait you are holding, Pac-Man stops chewing, and the header
+reads `paused at 6m12s`. It stops the *timer*, not the work: a pass already
+under way runs to the end, because abandoning a review halfway is a much bigger
+thing and `x` is the key for that. Letting go resumes from where it stopped
+rather than firing immediately, which is why the wait is carried as a remaining
+duration rather than a deadline.
+
+`r` and `p` compose. Asking for a scan while paused runs one pass and leaves the
+pause set — a standing setting and a one-off, and neither silently undoes the
+other.
 
 Quitting — or `Ctrl-C`, which does not stop to ask — kills any model call in
 flight rather than letting it finish. A review whose result nobody is left to
@@ -357,6 +376,14 @@ The gates, all per repository and all switchable:
 | `only_if_review_requested` | off | you are not a requested reviewer |
 | `base_branches` | — | the PR targets a branch outside the list |
 
+A PR is normally reviewed once per head SHA — a second review of the same commit
+is refused, which is what stops a crash between "GitHub accepted it" and "state
+recorded it" from posting twice. **Clicking "Re-request review" overrides that.**
+It has to: a PR whose comments are all resolved but whose last review was a
+`COMMENT` has no approval and no new commits to trigger one, so without the
+override the only way to unstick it is to push something. GitHub drops you from
+the requested-reviewer list the moment you submit, so it cannot loop.
+
 ### What gets sent
 
 The diff is compressed in three tiers before it goes anywhere, and everything
@@ -388,6 +415,27 @@ Resolving a conversation does not by itself unblock merging — a
 unblock always comes from a later `APPROVE`.
 
 A PR with unaddressed nits and a silent author waits indefinitely, on purpose.
+Re-request a review to break that tie — see the note under the gates above.
+
+`approval.manual_only_when` holds a PR back for you even when the review is
+clean: too many changed lines, a label, or a path pattern like
+`packages/db/src/migrations/**`. That is worked out on **every scan**, not only
+when a review finishes, so the board can tell you a PR is going to land on you
+while its author is still working on it. Two marks, deliberately different:
+
+- **`?` needs your approval** — clean, waiting on you now.
+- **`◦` will need you** — held by the same rules, but changes are still
+  requested, so it is the author's move.
+
+Both show the reason in the detail pane. Only the first is counted: "3 need you"
+in the sidebar and the header, and the `a` filter, all mean work you can pick up
+right now. A mark that means "this is coming" is worth having on the row and
+would be a lie in a count.
+
+The legend under the board explains **the marks currently on it**, not every
+mark that exists, and it is fitted to the pane — when there is not room, the
+least urgent entries give way to a `+2 more`. A one-line bar that overflows gets
+cut wherever the pane ends, which is how you end up reading "? needs your".
 
 When a thread goes back and forth past
 `review.max_disagreement_rounds_per_thread`, that one thread goes quiet and you

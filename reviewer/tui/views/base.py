@@ -115,7 +115,9 @@ class RecordView(Vertical):
         self.action_bar.show(left, right)
 
     def redraw_status(self) -> None:
-        self.status_bar.update(self.status_text())
+        self.status_bar.update(
+            self.status_text(width=self.status_bar.content_size.width)
+        )
         self.pager_bar.update(self.pager_text())
 
     @on(DataTable.RowHighlighted)
@@ -146,7 +148,11 @@ class RecordView(Vertical):
     def empty_text(self) -> Text:
         raise NotImplementedError
 
-    def status_text(self) -> Text:
+    def status_text(self, *, width: int = 0) -> Text:
+        """What the bar under the list says. ``width`` is the space it has.
+
+        Zero means "not laid out yet, do not try to fit anything".
+        """
         raise NotImplementedError
 
     def pager_text(self) -> Text:

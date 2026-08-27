@@ -25,6 +25,19 @@ class Attention(unittest.TestCase):
     def test_a_held_back_approval_asks_for_a_human(self) -> None:
         self.assertIs(attention(pull_request(needs_human=1)), theme.APPROVAL)
 
+    def test_held_but_still_with_its_author_does_not_ask_for_you_yet(self) -> None:
+        # It touches paths held for manual approval, so it will land on you --
+        # but changes are requested, so right now it is the author's move. It
+        # gets a mark without being ranked as something you can act on.
+        waiting_on_author = pull_request(
+            needs_human=1, review_decision="CHANGES_REQUESTED"
+        )
+        self.assertIs(attention(waiting_on_author), theme.HELD)
+
+    def test_the_held_mark_outranks_nothing_and_that_is_the_point(self) -> None:
+        self.assertGreater(theme.HELD.rank, theme.APPROVAL.rank)
+        self.assertGreater(theme.HELD.rank, theme.REPLIES.rank)
+
     def test_our_own_approved_work_is_flagged_by_mergeability(self) -> None:
         ours = dict(is_ours=1, review_decision="APPROVED")
         self.assertIs(
@@ -118,6 +131,37 @@ class StatusOf(unittest.TestCase):
         )
         verdict = status_of(settled)
         self.assertEqual((verdict.text, verdict.style), ("reviewed", theme.DONE))
+
+    def test_our_own_approval_shows_when_github_has_no_decision(self) -> None:
+        # reviewDecision is null on any repository that does not require a
+        # review to merge, which is most of them. Without the fallback, a pull
+        # request approved hours ago sat on the board saying "reviewed".
+        approved = pull_request(
+            our_review_state="APPROVED",
+            review_decision="",
+            last_action="skipped: nothing changed since last review",
+            reviewed=True,
+        )
+        verdict = status_of(approved)
+        self.assertEqual((verdict.text, verdict.style), ("approved", theme.SETTLED))
+
+    def test_our_own_changes_requested_shows_the_same_way(self) -> None:
+        blocked = pull_request(
+            our_review_state="CHANGES_REQUESTED",
+            review_decision="",
+            last_action="skipped: nothing changed since last review",
+            reviewed=True,
+        )
+        self.assertEqual(status_of(blocked).text, "changes req.")
+
+    def test_githubs_decision_still_wins_when_it_has_one(self) -> None:
+        # Ours is a fallback, not an override: if the repository does require
+        # reviews and someone else has since requested changes, that is the
+        # answer, whatever we said last.
+        disputed = pull_request(
+            our_review_state="APPROVED", review_decision="CHANGES_REQUESTED"
+        )
+        self.assertEqual(status_of(disputed).text, "changes req.")
 
     def test_a_skip_before_any_review_still_reads_as_never_reviewed(self) -> None:
         untouched = pull_request(last_action="skipped: CI still running: build")

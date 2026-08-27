@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 from types import FrameType
-from typing import Any
+from typing import Any, Callable
 
 from . import (
     backfill,
@@ -369,6 +369,71 @@ def _ymd(epoch: float) -> str:
     return time.strftime("%d %b %Y", time.localtime(epoch))
 
 
+def wait_between_ticks(
+    *,
+    seconds: float,
+    stop: threading.Event,
+    wake: threading.Event,
+    pause: threading.Event,
+    status: dict[str, Any],
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], Any] | None = None,
+    step: float = 0.5,
+) -> None:
+    """Hold between passes, and keep the header honest about why.
+
+    Three things can end the wait: it runs out, somebody asks for a scan, or the
+    run is stopping. A pause ends nothing — it holds the countdown where it is,
+    indefinitely.
+
+    The countdown is carried as a remaining duration rather than a deadline,
+    which is the whole reason pause works: against a deadline, ten minutes held
+    is ten minutes of wait that has already elapsed, so letting go would fire a
+    pass immediately instead of resuming where it stopped.
+
+    ``wake`` is checked above ``pause`` on purpose. Asking for one scan by hand
+    is exactly what that key is for while the timer is off, and it leaves the
+    pause set.
+
+    Returns when a pass should start. ``sleep`` defaults to ``stop.wait``, so a
+    run that is shutting down does not sit out the rest of the step.
+    """
+    if sleep is None:
+        sleep = stop.wait
+
+    total = float(seconds)
+    remaining = total
+    last = monotonic()
+
+    while not stop.is_set():
+        if wake.is_set():
+            wake.clear()
+            # Said here rather than left to the pass itself: the countdown is
+            # the cue that the key worked, and leaving it counting down for
+            # another moment is exactly the "did that do anything?" this fixes.
+            status.update(phase="scanning…", remaining=None, total=None, paused=False)
+            return
+
+        now = monotonic()
+        elapsed = now - last
+        last = now
+
+        if pause.is_set():
+            # Time passes; the countdown does not.
+            status.update(
+                phase="paused", remaining=remaining, total=total, paused=True
+            )
+        else:
+            remaining = max(0.0, remaining - elapsed)
+            status.update(
+                phase="waiting", remaining=remaining, total=total, paused=False
+            )
+            if remaining <= 0:
+                return
+
+        sleep(step)
+
+
 def _run_with_tui(
     *,
     repos: list[RepoConfig],
@@ -418,7 +483,14 @@ def _run_with_tui(
     logger.addHandler(pane)
 
     stop = threading.Event()
-    status: dict[str, Any] = {"phase": "starting…", "remaining": None, "total": None}
+    wake = threading.Event()
+    pause = threading.Event()
+    status: dict[str, Any] = {
+        "phase": "starting…",
+        "remaining": None,
+        "total": None,
+        "paused": False,
+    }
     # Taken before the worker starts, so nothing it notices can predate it and
     # fall outside the Summary tab's "this run".
     run_started = time.time()
@@ -445,8 +517,12 @@ def _run_with_tui(
                             force=args.force,
                             only_repo=args.repo,
                             only_pr=args.pr,
+                            # paused=False while a pass runs even if the pause
+                            # is set: it holds the *timer*, and this pass is
+                            # already past it. Leaving the flag true here would
+                            # have the interface read a live pass as idle.
                             status_cb=lambda text: status.update(
-                                phase=text, remaining=None, total=None
+                                phase=text, remaining=None, total=None, paused=False
                             ),
                         )
                     logger.info(
@@ -461,14 +537,13 @@ def _run_with_tui(
                 except Exception as exc:  # noqa: BLE001 - a dead thread must not hang the UI
                     logger.exception("tick failed: %s", exc)
 
-                next_at = time.monotonic() + global_cfg.tick_seconds
-                while not stop.is_set() and time.monotonic() < next_at:
-                    status.update(
-                        phase="waiting",
-                        remaining=max(0.0, next_at - time.monotonic()),
-                        total=float(global_cfg.tick_seconds),
-                    )
-                    stop.wait(0.5)
+                wait_between_ticks(
+                    seconds=global_cfg.tick_seconds,
+                    stop=stop,
+                    wake=wake,
+                    pause=pause,
+                    status=status,
+                )
         finally:
             work_store.close()
 
@@ -512,6 +587,8 @@ def _run_with_tui(
                 stop=stop,
                 status=lambda: dict(status),
                 started_at=run_started,
+                wake=wake,
+                pause=pause,
                 backfiller=backfiller,
                 summariser=summariser,
                 conversations=conversations,

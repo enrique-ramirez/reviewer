@@ -25,7 +25,7 @@ from .. import prose, theme
 from ..formatting import clip
 from ..models import PullRequest, owner_of, short_name
 from ..session import ALL_REPOSITORIES, Session
-from ..status import attention
+from ..status import wants_you
 
 NAME_WIDTH = 30
 INDENT = "   "
@@ -58,7 +58,7 @@ def _tally(label: str, subtitle: str, rows: Sequence[PullRequest], **kwargs: boo
         subtitle=subtitle,
         open_count=len(rows),
         reviewed=sum(1 for pr in rows if pr.reviewed_by_us),
-        waiting=sum(1 for pr in rows if attention(pr)),
+        waiting=sum(1 for pr in rows if wants_you(pr)),
         busy=any(pr.activity for pr in rows),
         **kwargs,
     )

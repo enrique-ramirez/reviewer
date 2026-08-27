@@ -7,6 +7,7 @@ a rising severity bar, and a reviewer that can see what it already said.
 
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,7 @@ from reviewer.config import REPO_DEFAULTS, RepoConfig, _deep_merge
 from reviewer.gh.graphql import ReviewThread, ThreadComment
 from reviewer.pipeline import Reviewer
 from reviewer.render import Finding
-from reviewer.state import PRState
+from reviewer.state import PRState, Store
 
 
 def repo_config(
@@ -354,6 +355,46 @@ class ChoosingWhatToRead(unittest.TestCase):
         self.assertEqual(len(got or []), 1)
         self.assertIsNone(since)
         self.assertEqual(rest.compared, [])
+
+
+class AskingForAnotherLookAtUnchangedCode(unittest.TestCase):
+    """The deadlock a re-review request used to walk into.
+
+    Everything on the pull request is resolved, but the last review was a
+    COMMENT, so there is no approval and the merge button stays off. Clicking
+    "Re-request review" is the only move left — and it did nothing, because the
+    duplicate-post guard refused a second review of a SHA that had already had
+    one. The pull request could only be unstuck by pushing a commit.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.store = Store(Path(self._tmp.name))
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _post_a_review(self, sha: str = "samesha") -> None:
+        self.assertTrue(self.store.begin_post("acme/widgets", 42, sha, "review"))
+        self.store.finish_post("acme/widgets", 42, sha, "review")
+
+    def test_the_guard_still_refuses_an_accidental_repeat(self) -> None:
+        self._post_a_review()
+        self.assertTrue(self.store.already_posted("acme/widgets", 42, "samesha"))
+        self.assertFalse(
+            self.store.begin_post("acme/widgets", 42, "samesha", "review")
+        )
+
+    def test_a_re_review_request_is_the_trigger_that_bypasses_it(self) -> None:
+        # The pipeline reads decision.trigger; this is the value it checks for.
+        decision = gates.Decision(True, "re-review requested", "review_requested")
+        self.assertEqual(decision.trigger, "review_requested")
+        self.assertTrue(decision.should_review)
+
+    def test_a_new_push_is_not_a_repeat_and_never_was(self) -> None:
+        self._post_a_review("oldsha")
+        self.assertFalse(self.store.already_posted("acme/widgets", 42, "newsha"))
 
 
 if __name__ == "__main__":

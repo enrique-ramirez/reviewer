@@ -224,7 +224,7 @@ class SummaryView(RecordView):
             theme.MUTED,
         )
 
-    def status_text(self) -> Text:
+    def status_text(self, *, width: int = 0) -> Text:
         return prose.join(
             prose.span("  this run", theme.KEY),
             prose.span(f"   {self._total} merged", theme.MUTED),
@@ -409,7 +409,7 @@ class HistoryView(RecordView):
     def empty_text(self) -> Text:
         return history_empty(self._shown)
 
-    def status_text(self) -> Text:
+    def status_text(self, *, width: int = 0) -> Text:
         return history_status(self._shown)
 
     def pager_text(self) -> Text:

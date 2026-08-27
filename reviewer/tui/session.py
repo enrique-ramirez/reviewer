@@ -29,7 +29,6 @@ class Session:
     repos: tuple[str, ...]
     started_at: float
     repo_index: int = 0
-    only_attention: bool = False
     author: str = ""
     window: int = 0
     page: int = 0
@@ -98,9 +97,6 @@ class Session:
 
     def moved_by(self, delta: int) -> "Session":
         return self.with_repo(self.repo_index + delta)
-
-    def with_attention_only(self, only: bool) -> "Session":
-        return replace(self, only_attention=only)
 
     def with_author(self, author: str) -> "Session":
         return replace(self, author=author.strip(), page=0)

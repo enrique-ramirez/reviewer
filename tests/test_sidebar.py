@@ -49,6 +49,23 @@ class Summarise(unittest.TestCase):
         self.assertEqual((widgets.open_count, widgets.reviewed, widgets.waiting), (3, 2, 1))
         self.assertFalse(widgets.busy)
 
+    def test_work_held_for_later_is_not_counted_as_needing_you(self) -> None:
+        # It touches paths held for manual approval, so it is marked — but its
+        # author still has changes to make, so there is nothing here for you to
+        # do. Counting it sends you to a repository to find no job waiting.
+        held = [
+            pull_request(
+                repo="acme/widgets",
+                pr_number=7,
+                needs_human=1,
+                review_decision="CHANGES_REQUESTED",
+                reviewed=True,
+            )
+        ]
+        widgets = sidebar.summarise(held, session())[1]
+        self.assertEqual(widgets.open_count, 1)
+        self.assertEqual(widgets.waiting, 0)
+
     def test_a_repository_with_nothing_open_still_gets_a_row(self) -> None:
         stats = sidebar.summarise([], session())
         self.assertEqual([s.open_count for s in stats], [0, 0, 0])

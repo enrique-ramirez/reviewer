@@ -109,11 +109,20 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
         self.store.close()
         self._tmp.cleanup()
 
-    def _app(self, summariser: Any = None) -> Dashboard:
+    def _app(
+        self,
+        summariser: Any = None,
+        *,
+        wake: threading.Event | None = None,
+        pause: threading.Event | None = None,
+        phase: str = "waiting",
+        paused: bool = False,
+    ) -> Dashboard:
         status: dict[str, Any] = {
-            "phase": "waiting",
+            "phase": phase,
             "remaining": 300.0,
             "total": 900.0,
+            "paused": paused,
         }
         return Dashboard(
             Runtime(
@@ -123,9 +132,58 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
                 stop=threading.Event(),
                 status=lambda: dict(status),
                 started_at=self.now - 60,
+                wake=wake,
+                pause=pause,
                 summariser=summariser,
             )
         )
+
+    async def test_pause_and_play_are_the_same_key(self) -> None:
+        pause = threading.Event()
+        app = self._app(pause=pause)
+        async with app.run_test() as pilot:
+            await pilot.press("p")
+            self.assertTrue(pause.is_set())
+            await pilot.press("p")
+            self.assertFalse(pause.is_set())
+
+    async def test_a_scan_can_still_be_asked_for_while_paused(self) -> None:
+        # Pause holds the timer; `r` is a one-off. They compose, and asking for
+        # a scan by hand does not quietly turn the timer back on.
+        wake, pause = threading.Event(), threading.Event()
+        pause.set()
+        app = self._app(wake=wake, pause=pause, phase="paused", paused=True)
+        async with app.run_test() as pilot:
+            await pilot.press("r")
+            self.assertTrue(wake.is_set())
+            self.assertTrue(pause.is_set())
+
+    async def test_pause_says_so_when_there_is_no_loop_to_pause(self) -> None:
+        app = self._app(pause=None)
+        async with app.run_test() as pilot:
+            await pilot.press("p")  # must not raise
+
+    async def test_refresh_asks_the_worker_for_a_scan(self) -> None:
+        wake = threading.Event()
+        app = self._app(wake=wake)
+        async with app.run_test() as pilot:
+            await pilot.press("r")
+            self.assertTrue(wake.is_set())
+
+    async def test_refresh_does_not_queue_a_scan_onto_a_running_one(self) -> None:
+        # Setting it here would start another pass the moment this one ends,
+        # which is not what the key means.
+        wake = threading.Event()
+        app = self._app(wake=wake, phase="reviewing acme/widgets#12")
+        async with app.run_test() as pilot:
+            await pilot.press("r")
+            self.assertFalse(wake.is_set())
+
+    async def test_refresh_still_redraws_with_no_worker_behind_it(self) -> None:
+        app = self._app(wake=None)
+        async with app.run_test() as pilot:
+            await pilot.press("r")
+            self.assertEqual(app.board.table.row_count, 2)
 
     async def test_every_tab_renders_its_rows(self) -> None:
         app = self._app()
@@ -144,16 +202,9 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.tab, "history")
             self.assertEqual(app.history.table.row_count, 1)
 
-    async def test_the_attention_filter_and_the_repository_scope_hold_together(
-        self,
-    ) -> None:
+    async def test_the_repository_scope_follows_the_sidebar(self) -> None:
         app = self._app()
         async with app.run_test() as pilot:
-            await pilot.press("a")
-            self.assertTrue(app.session.only_attention)
-            self.assertEqual([pr.number for pr in app.pull_requests], [12])
-
-            await pilot.press("a")
             await pilot.press("e", "down")
             self.assertTrue(app.sidebar.has_focus)
             self.assertEqual(app.session.scope, ("acme/widgets",))
@@ -186,7 +237,6 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
     async def test_keys_are_offered_only_where_they_do_something(self) -> None:
         app = self._app()
         async with app.run_test():
-            self.assertTrue(app.check_action("toggle_filter", ()))
             self.assertFalse(app.check_action("backfill", ()))
             self.assertFalse(app.check_action("describe", ()))
             self.assertTrue(app.check_action("focus_repos", ()))

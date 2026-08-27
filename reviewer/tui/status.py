@@ -64,6 +64,13 @@ def attention(pull_request: PullRequest) -> Flag | None:
     if pull_request.capped_threads:
         return theme.DISAGREEMENT
     if pull_request.needs_human:
+        # "Held for a human" and "waiting for a human right now" are different
+        # claims. A pull request with changes requested is waiting on its
+        # author; saying it needs your approval would put it at the top of your
+        # list for something you cannot do yet. It still gets a mark, because
+        # knowing it will land on you is worth knowing early.
+        if pull_request.wants_changes:
+            return theme.HELD
         return theme.APPROVAL
     if ours_and_approved and pull_request.mergeable == "CONFLICTING":
         return theme.CONFLICT
@@ -81,6 +88,18 @@ def attention(pull_request: PullRequest) -> Flag | None:
 def rank(pull_request: PullRequest) -> int:
     flag = attention(pull_request)
     return flag.rank if flag else theme.UNFLAGGED_RANK
+
+
+def wants_you(pull_request: PullRequest) -> bool:
+    """Whether this pull request is asking you for something *now*.
+
+    Narrower than carrying a flag. A pull request held for manual approval while
+    its author still has changes to make is marked, because it is worth knowing
+    it is coming — but it is not work you can pick up, so it does not belong in
+    a count of what needs you or in the filter that shows only that.
+    """
+    flag = attention(pull_request)
+    return bool(flag and flag.wants_you)
 
 
 def peer_verdict(pull_request: PullRequest) -> Status:

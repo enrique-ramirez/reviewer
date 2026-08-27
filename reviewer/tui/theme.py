@@ -65,6 +65,13 @@ class Flag:
     label: str
     rank: int
     detail: str
+    wants_you: bool = True
+    """Whether this flag is asking the reader to do something.
+
+    Every flag is worth a mark on the row, but not every mark is a job. The
+    counters that say "3 need you" are promising something you can act on, so a
+    flag that only means "this will land on you eventually" must not be in them.
+    """
 
 
 DISAGREEMENT = Flag(
@@ -91,6 +98,11 @@ REPLIES = Flag(
     "»", NEEDS_YOU, "replies to check", 5,
     "someone replied to your review comments",
 )
+HELD = Flag(
+    "◦", PENDING, "will need you", 6,
+    "held for manual approval — it will wait for you once it is clean",
+    wants_you=False,
+)
 
 FLAGS: tuple[Flag, ...] = (
     DISAGREEMENT,
@@ -99,6 +111,7 @@ FLAGS: tuple[Flag, ...] = (
     MERGEABLE,
     MERGE_PENDING,
     REPLIES,
+    HELD,
 )
 
 UNFLAGGED_RANK = len(FLAGS) + 1

@@ -241,6 +241,8 @@ class PullRequest:
     capped_threads: int
     needs_human: bool
     needs_human_reason: str
+    our_review_state: str
+    """The state of our own most recent review, or "" if we never posted one."""
     last_action: str
     activity: Activity | None = None
     reviewed_by_us: bool = False
@@ -254,11 +256,23 @@ class PullRequest:
 
     @property
     def is_approved(self) -> bool:
-        return self.review_decision == "APPROVED"
+        """Whether this pull request has the approval it needs.
+
+        GitHub's own ``reviewDecision`` answers this only on repositories that
+        require a review to merge. Everywhere else it is null however many
+        approvals a pull request has, so falling back to our own last review is
+        the difference between the board saying "approved" and the board saying
+        "reviewed" about a pull request we approved hours ago.
+        """
+        if self.review_decision:
+            return self.review_decision == "APPROVED"
+        return self.our_review_state == "APPROVED"
 
     @property
     def wants_changes(self) -> bool:
-        return self.review_decision == "CHANGES_REQUESTED"
+        if self.review_decision:
+            return self.review_decision == "CHANGES_REQUESTED"
+        return self.our_review_state == "CHANGES_REQUESTED"
 
     @classmethod
     def from_row(
@@ -295,6 +309,7 @@ class PullRequest:
             capped_threads=_count(row, "capped_threads"),
             needs_human=bool(row.get("needs_human")),
             needs_human_reason=_text(row, "needs_human_reason"),
+            our_review_state=_text(row, "our_review_state").upper(),
             last_action=_text(row, "last_action"),
             activity=activity,
             reviewed_by_us=reviewed,

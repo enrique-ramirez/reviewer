@@ -191,6 +191,8 @@ class Progress:
     phase: str = ""
     remaining: float | None = None
     total: float | None = None
+    paused: bool = False
+    """The countdown is held where it is and no scan will start on the timer."""
 
     @property
     def counting_down(self) -> bool:
@@ -214,6 +216,7 @@ class Progress:
             phase=str(status.get("phase") or ""),
             remaining=status.get("remaining"),
             total=status.get("total"),
+            paused=bool(status.get("paused")),
         )
 
 
@@ -222,10 +225,16 @@ def track_text(progress: Progress, frame: int) -> Text:
     eaten = int(progress.fraction * TRACK_DOTS)
     track = Text("  ")
     track.append(" " * eaten)
-    track.append(theme.pac_frame(frame), style="bold yellow")
+    # Paused keeps its place on the track — that is the point, you can see how
+    # much of the wait you are holding — but stops chewing. A mouth still
+    # opening and closing over a number that never changes reads as a hang.
+    track.append(theme.pac_frame(0 if progress.paused else frame), style="bold yellow")
     track.append(theme.DOT * max(0, TRACK_DOTS - eaten), style=theme.FAINT)
     track.append(theme.GHOST, style=theme.URGENT)
-    track.append(f"   next scan {progress.countdown}", style=theme.MUTED)
+    if progress.paused:
+        track.append(f"   paused at {progress.countdown}", style=theme.NEEDS_YOU)
+    else:
+        track.append(f"   next scan {progress.countdown}", style=theme.MUTED)
     return track
 
 

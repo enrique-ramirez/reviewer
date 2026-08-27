@@ -43,12 +43,17 @@ class InView(unittest.TestCase):
         )
         self.assertEqual([pr.repo for pr in scoped], ["acme/gadgets"])
 
-    def test_the_attention_filter_hides_everything_settled(self) -> None:
-        filtered = board.in_view(
-            [pull_request(pr_number=1), pull_request(pr_number=2, needs_human=1)],
-            session(only_attention=True),
+    def test_work_held_for_later_sorts_below_work_that_wants_you(self) -> None:
+        ordered = board.in_view(
+            [
+                pull_request(
+                    pr_number=1, needs_human=1, review_decision="CHANGES_REQUESTED"
+                ),
+                pull_request(pr_number=2, needs_human=1),
+            ],
+            session(),
         )
-        self.assertEqual([pr.number for pr in filtered], [2])
+        self.assertEqual([pr.number for pr in ordered], [2, 1])
 
 
 class Counts(unittest.TestCase):
@@ -66,14 +71,16 @@ class Counts(unittest.TestCase):
         # And not how many are open: that is on the Dashboard tab now, which is
         # the thing it is true of.
         rows = [pull_request(), pull_request(pr_number=2, needs_human=1)]
-        self.assertEqual(board.subtitle(rows, session()), "1 need you")
-        self.assertEqual(
-            board.subtitle(rows, session(only_attention=True)),
-            "1 need you · filtered",
-        )
+        self.assertEqual(board.subtitle(rows), "1 need you")
 
     def test_a_quiet_board_says_nothing_after_the_title(self) -> None:
-        self.assertEqual(board.subtitle([pull_request()], session()), "")
+        self.assertEqual(board.subtitle([pull_request()]), "")
+
+    def test_a_board_of_only_held_work_promises_you_nothing(self) -> None:
+        # "1 need you" against a pull request whose author still has work to do
+        # sends you looking for a job that is not there.
+        held = pull_request(needs_human=1, review_decision="CHANGES_REQUESTED")
+        self.assertEqual(board.subtitle([held]), "")
 
     def test_the_longest_running_review_drives_the_timer(self) -> None:
         rows = [
@@ -83,6 +90,53 @@ class Counts(unittest.TestCase):
         ]
         self.assertEqual(board.longest_running(rows, NOW), 90)
         self.assertEqual(board.longest_running([pull_request()], NOW), 0.0)
+
+
+class Legend(unittest.TestCase):
+    def test_it_explains_only_the_marks_that_are_on_the_board(self) -> None:
+        rows = [pull_request(pr_number=1, needs_human=1), pull_request(pr_number=2)]
+        plain = board.legend(rows, 200).plain
+        self.assertIn("needs your approval", plain)
+        self.assertNotIn("replies to check", plain)
+        self.assertNotIn("ready to merge", plain)
+
+    def test_a_board_with_nothing_flagged_says_nothing(self) -> None:
+        self.assertEqual(board.legend([pull_request()], 200).plain, "")
+
+    def test_it_never_runs_past_the_width_it_was_given(self) -> None:
+        rows = [
+            pull_request(pr_number=1, capped_threads=1),
+            pull_request(pr_number=2, needs_human=1),
+            pull_request(pr_number=3, threads_awaiting_us=2),
+            pull_request(
+                pr_number=4, needs_human=1, review_decision="CHANGES_REQUESTED"
+            ),
+        ]
+        for width in range(4, 130):
+            self.assertLessEqual(
+                board.legend(rows, width).cell_len,
+                width,
+                f"legend overflowed at width {width}",
+            )
+
+    def test_what_it_drops_it_counts(self) -> None:
+        rows = [
+            pull_request(pr_number=1, capped_threads=1),
+            pull_request(pr_number=2, needs_human=1),
+            pull_request(pr_number=3, threads_awaiting_us=2),
+        ]
+        narrow = board.legend(rows, 50).plain
+        self.assertIn("settle a disagreement", narrow)  # most urgent survives
+        self.assertIn("+2 more", narrow)
+
+    def test_no_width_means_no_fitting(self) -> None:
+        # Before the first layout there is nothing to fit to; showing the whole
+        # thing beats showing one entry and a count of what was hidden.
+        rows = [
+            pull_request(pr_number=1, capped_threads=1),
+            pull_request(pr_number=2, needs_human=1),
+        ]
+        self.assertNotIn("more", board.legend(rows, 0).plain)
 
 
 class BoardCells(unittest.TestCase):
