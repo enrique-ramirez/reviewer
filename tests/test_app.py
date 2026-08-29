@@ -241,6 +241,23 @@ class DashboardSmoke(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(app.check_action("describe", ()))
             self.assertTrue(app.check_action("focus_repos", ()))
             self.assertTrue(app.check_action("quit", ()))
+            self.assertTrue(app.check_action("stop_review", ()))
+
+    async def test_stopping_a_review_is_a_dashboard_key_only(self) -> None:
+        """A merged row has no review to stop, and asking it for one crashed.
+
+        The key reached whatever was under the cursor on whichever tab, and the
+        merged rows on Summary and History have no ``activity`` to read.
+        """
+        app = self._app()
+        async with app.run_test() as pilot:
+            for tab in ("s", "h"):
+                await pilot.press(tab)
+                await pilot.pause()
+                self.assertIsNotNone(app.view.current)
+                self.assertFalse(app.check_action("stop_review", ()))
+                await pilot.press("x")  # must not raise
+                await pilot.pause()
 
     async def test_the_spinner_advances_without_rebuilding_the_table(self) -> None:
         app = self._app()

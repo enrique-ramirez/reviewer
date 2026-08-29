@@ -253,24 +253,34 @@ class Reviewer:
     def _record_merges(self, open_numbers: list[int]) -> list[int]:
         """File pull requests that left the open list having been merged.
 
-        Only ones we reviewed, and approval is not the bar — a pull request we
-        commented on or requested changes on is one we have an opinion about,
-        and where it ended up is worth knowing.
+        Ones we reviewed, and ones we wrote. Approval is not the bar on either
+        count — a pull request we commented on or requested changes on is one we
+        have an opinion about, and where it ended up is worth knowing.
 
-        That filter is also what keeps this cheap. A pull request nobody asked
-        us about costs nothing when it closes; only the ones we touched buy a
-        request, and only once each.
+        Our own are here because the reviewer never reviews them: ``skip_own_prs``
+        turns them away before a model call, so nothing about them ever reaches
+        ``review_events``, and a filter that asked only "did we review this" left
+        everything its owner shipped out of both Summary and History. What landed
+        is the one thing the tabs exist to say, and one's own work is not the part
+        to leave out of it.
+
+        That filter is also what keeps this cheap. A pull request nobody asked us
+        about and nobody here wrote costs nothing when it closes; only the ones we
+        touched buy a request, and only once each.
 
         Returns the numbers whose fate could not be established, for the caller
         to keep on the board so the next tick can try again.
         """
         cfg = self.cfg
         vanished = sorted(set(self.store.board_numbers(cfg.repo)) - set(open_numbers))
+        # Read before ``forget_closed`` prunes the board, which is the last
+        # place a merged pull request of ours is still known to be ours.
+        ours = self.store.our_board_numbers(cfg.repo)
         unresolved: list[int] = []
         for number in vanished:
             if self.store.is_merge_recorded(cfg.repo, number):
                 continue
-            if not self.store.has_reviewed(cfg.repo, number):
+            if number not in ours and not self.store.has_reviewed(cfg.repo, number):
                 continue
             try:
                 pull = self.rest.get_pull(cfg.owner, cfg.name, number)

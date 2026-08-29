@@ -195,6 +195,11 @@ class Dashboard(App[None]):
     # Keys that only mean something on one tab. Anything unlisted works
     # everywhere. Summary has none of its own: it shows this run and nothing
     # else, which is the whole point of it.
+    #
+    # This is not only about what to advertise: a disabled binding is not
+    # dispatched at all, so it is also what keeps a key meant for a live pull
+    # request from reaching a merged one. Stopping a review is the case in
+    # point — only the Dashboard's rows have a review to stop.
     TAB_ACTIONS = {
         "author_filter": HISTORY,
         "cycle_window": HISTORY,
@@ -202,6 +207,7 @@ class Dashboard(App[None]):
         "page_forward": HISTORY,
         "backfill": HISTORY,
         "describe": HISTORY,
+        "stop_review": DASHBOARD,
     }
 
     SIDEBAR_ACTIONS = frozenset({"focus_repos", "toggle_repos"})
@@ -602,6 +608,11 @@ class Dashboard(App[None]):
         """
         record = self.view.current
         if self.typing or self.asking or record is None:
+            return
+        if not isinstance(record, PullRequest):
+            # Unreachable through the key, which TAB_ACTIONS confines to the
+            # Dashboard. Kept because a merged row has no review to stop and
+            # asking it for one used to end the process.
             return
         if record.activity is None:
             self.notify(f"#{record.number} is not being reviewed", timeout=3)

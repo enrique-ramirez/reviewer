@@ -649,6 +649,19 @@ class Store:
         ).fetchall()
         return [int(r["pr_number"]) for r in rows]
 
+    def our_board_numbers(self, repo: str) -> set[int]:
+        """Which of those we wrote ourselves.
+
+        Read while the row is still on the board, because that is the only
+        record that a pull request was ours: the reviewer never reviews its
+        owner's work, so nothing in ``review_events`` remembers it, and once it
+        merges and the board row is dropped there is nothing left to ask.
+        """
+        rows = self.conn.execute(
+            "SELECT pr_number FROM pr_view WHERE repo = ? AND is_ours = 1", (repo,)
+        ).fetchall()
+        return {int(r["pr_number"]) for r in rows}
+
     def forget_closed(self, repo: str, open_numbers: list[int]) -> None:
         """Drop board rows for pull requests that are no longer open.
 
