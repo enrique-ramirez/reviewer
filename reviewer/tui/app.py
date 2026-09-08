@@ -805,7 +805,7 @@ class Dashboard(App[None]):
         if self.typing or self.tab != HISTORY or self.asking:
             return
         if runner is None:
-            self.notify("backfill needs ./run.sh --backfill here", timeout=4)
+            self.notify("backfill needs ./blinky.sh --backfill here", timeout=4)
             return
         if runner.busy:
             # The same key stops it. The sweep ends between pages and keeps

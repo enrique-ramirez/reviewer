@@ -233,9 +233,9 @@ def run(config_dir: Path, repo_root: Path) -> int:
 
     _say()
     _say("Next:")
-    _say("  ./run.sh --check           does the token reach everything?")
-    _say("  ./run.sh --once --dry-run  one pass, posting nothing")
-    _say("  ./run.sh                   watch, with the dashboard")
+    _say("  ./blinky.sh --check           does the token reach everything?")
+    _say("  ./blinky.sh --once --dry-run  one pass, posting nothing")
+    _say("  ./blinky.sh                   watch, with the dashboard")
     _say()
     _say("Then edit personality/ — that is your review voice, and the part")
     _say("worth spending time on.")

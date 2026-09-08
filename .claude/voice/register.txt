@@ -1,0 +1,192 @@
+# Words and phrases that make prose read like an assistant rather than a person.
+#
+# Three kinds of line:
+#
+#   !phrase    a literal substring, checked mechanically, case-insensitive
+#   ~regex     a Python regular expression, checked mechanically
+#   phrase     judgement, applied by the review agents and never by the hook
+#
+# The mechanical set is deliberately small. It holds only phrases with no
+# innocent use in a source tree. Ordinary English stays on the judgement list,
+# because a word like "power" or "fast" is honest in an identifier, a fixture,
+# a test name or a sentence somebody meant.
+#
+# RFC 2119 keywords are not register hits. Documentation uses MUST, SHOULD and
+# MAY for obligations on purpose.
+#
+# A repository may add its own lines in `.claude/register.local.txt`, which is
+# read after this file.
+
+!delve into
+!dive into
+!take a dive into
+!it's worth noting
+!it is worth noting
+!it's important to note
+!it is important to note
+!in today's
+!in the realm of
+!in the world of
+!ever-evolving
+!everchanging
+!game changer
+!game-changing
+!groundbreaking
+!cutting-edge
+!unlock the secrets
+!unveil the secrets
+!sights unseen
+!sounds unheard
+~\bin the quest\b(?! ?ion)
+~\bembark(s|ed|ing)?\b
+!tapestry
+!gossamer
+!indelible
+!metropolis
+!labyrinth
+~\breverberat(e|es|ed|ing|ion)\b
+~\brevolution(ize|izes|ized|izing|ise|ises|ised|ising)\b
+!transformative
+!unprecedented
+!seismic
+!bustling
+!vibrant
+!whispering
+!nestled
+!designed to enhance
+!there are a few considerations
+!let's dive
+!picture this
+!as a professional
+!my friend
+!in conclusion
+!in summary
+!to summarize
+!to put it simply
+!under the hood
+!battle-tested
+!blazingly fast
+!first-class citizen
+!heavy lifting
+!at the end of the day
+!needless to say
+!simply put
+!rest assured
+!that being said
+!for your convenience
+!feel free to
+!let's take a look
+!the beauty of
+!a testament to
+!out of the box
+!best of both worlds
+!under normal circumstances
+!i hope this helps
+!great question
+!you're absolutely right
+!due to the fact that
+!at this point in time
+
+# Constructions, not words. `voice/constructions.md` explains each one.
+~\bnot (just|only|merely|simply)\b[^.!?]{0,70}?\b(but|it's|it is|they're|they are|that's|that is)\b
+~\b(it's|it is) not\b[^.!?]{0,50}?[,;]\s*(it's|it is)\b
+~\b(serves|acts) as\b
+~\bboasts\b
+~\b(could|may|might|can) (potentially|possibly|conceivably)\b
+~\bhelps? (to )?(ensure|enable|facilitate|streamline)\b
+
+additionally
+alternatively
+amongst
+and robust
+arguably
+as previously mentioned
+as well as
+bridging
+changing the game
+compelling
+consequently
+crucial
+daunting
+dilemma
+elevate
+emphasize
+ensure
+essentially
+essential
+even though
+evolving
+excels
+firstly
+foster
+foundations
+furthermore
+generally
+given that
+harness
+importantly
+in contrast
+in order to
+indeed
+it is advisable
+it should be noted
+journey
+keep in mind
+note that
+landscape
+mastering
+meticulous
+meticulously
+moreover
+navigating
+not only
+notably
+orchestrate
+orchestrating
+paramount
+profoundly
+promptly
+pursuit
+quest
+rapidly
+realm
+relentless
+reshape
+reshaping
+robust
+shall
+specifically
+subsequently
+tailored
+testament
+the world of
+thus
+to consider
+today's
+towards
+ultimately
+underpins
+underscore
+unleash
+vital
+when it comes to
+you may want to
+understanding
+alright
+
+# Self-congratulation. A comment calling something obvious is a comment that
+# should have been deleted, or should have been a name.
+obviously
+of course
+naturally
+simply
+just works
+elegantly
+gracefully
+seamlessly
+efficiently
+performant
+optimal
+sophisticated
+clever
+neat trick

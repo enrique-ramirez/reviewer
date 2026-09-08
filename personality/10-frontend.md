@@ -1,6 +1,6 @@
 # Front-end correctness
 
-> Seed content. Replace the specifics with the ones you actually care about —
+> Seed content. Replace the specifics with the ones you actually care about.
 > the failures you have personally had to debug are worth more here than general
 > best practice.
 
@@ -45,7 +45,7 @@ later.
 
 ## Rendering
 
-Keys drawn from array index reorder wrongly when the list reorders — the symptom
+Keys drawn from array index reorder wrongly when the list reorders. The symptom
 is inputs keeping the wrong values after a sort. Watch for expensive work in
 render that could sit outside it. Watch for lists that will be long in production
 but are three items in the fixture.

@@ -190,7 +190,7 @@ def _activity_line(pull_request: PullRequest, now: float, frame: int) -> Text | 
     running = formatting.elapsed(activity.running_for(now))
 
     line = prose.span(
-        f"{theme.spinner_frame(frame)} {verb} right now — {running}", theme.LIVE
+        f"{theme.spinner_frame(frame)} {verb} right now · {running}", theme.LIVE
     )
 
     # Only when it is a meaningful share of the total: a few seconds of drift

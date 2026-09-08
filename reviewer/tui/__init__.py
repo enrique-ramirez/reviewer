@@ -1,7 +1,7 @@
 """The dashboard, built on Textual.
 
 Textual is the one dependency in this project and it is imported only from this
-package. The reviewer itself — ``./run.sh``, ``--check``, ``--once`` — stays
+package. The reviewer itself — ``./blinky.sh``, ``--check``, ``--once`` — stays
 standard library only and works on a machine that has never run ``pip``.
 
 The layering, outermost last:

@@ -108,14 +108,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--tui",
         action="store_true",
-        help="run the reviewer and the board together in one window. ./run.sh "
+        help="run the reviewer and the board together in one window. ./blinky.sh "
         "does this by default",
     )
     parser.add_argument(
         "--lean",
         action="store_true",
         help="plain scrolling log, no dashboard and no dependencies. Read by "
-        "./run.sh, which otherwise starts the dashboard",
+        "./blinky.sh, which otherwise starts the dashboard",
     )
     parser.add_argument(
         "--force",
@@ -462,7 +462,7 @@ def _run_with_tui(
         print(
             f"--tui needs Textual, which is not installed ({exc}).\n"
             "  pip install textual\n"
-            "Everything else — ./run.sh, --once, --check — works without it.",
+            "Everything else — ./blinky.sh, --once, --check — works without it.",
             file=sys.stderr,
         )
         return 1
@@ -715,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
     lock_path = state_dir / "reviewer.lock"
     exit_code = 0
 
-    # --lean wins: it is the explicit request for no dashboard, and run.sh
+    # --lean wins: it is the explicit request for no dashboard, and blinky.sh
     # may have added --tui before seeing it.
     if args.tui and not args.lean:
         return _run_with_tui(

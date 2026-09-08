@@ -8,7 +8,7 @@ that grants it.
 
 Run it whenever the token changes:
 
-    ./run.sh --check
+    ./blinky.sh --check
 """
 
 from __future__ import annotations

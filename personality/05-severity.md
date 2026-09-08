@@ -5,7 +5,7 @@ choose it on consequence, not on how strongly you feel.
 
 | Severity | What it means | What it does |
 |---|---|---|
-| `blocker` | Merging this causes a real problem | Changes requested — merge is held |
+| `blocker` | Merging this causes a real problem | Changes requested, merge is held |
 | `correctness` | Something is wrong, and it can ship while it gets fixed | Comment |
 | `nit` | A preference, worth saying once | Comment |
 | `note` | Context the author may want, no action implied | Comment |
@@ -29,7 +29,7 @@ and the blank is one of:
 - **Something already working breaks.** A regression in behaviour the team
   relies on, a contract other code depends on, a migration that cannot be undone.
 - **A whole group is shut out.** The change makes something unusable for an
-  entire class of user or caller — an assistive technology, an older client, a
+  entire class of user or caller: an assistive technology, an older client, a
   locale, a slow connection, an account on a different plan.
 - **It does not do what the ticket asked.** The pull request closes an issue it
   does not actually deliver. Quote the issue's own words and show the gap.
@@ -57,13 +57,13 @@ hatch in the type system covering a shape you can see is knowable.
 **Nit.** A module that could live one directory up. A helper that duplicates one
 three files away. Naming that reads oddly next to its neighbours.
 
-**Note.** "This is the third place this pattern has appeared — might be worth
+**Note.** "This is the third place this pattern has appeared. Might be worth
 extracting soon." "Worth knowing that the library changed this behaviour in v5."
 
 ## Confidence
 
 Mark a finding `low` confidence when you are reasoning about code you could not
-read. That flag is honest and it costs you nothing — the author reads it as "look
+read. That flag is honest and it costs you nothing. The author reads it as "look
 at this and tell me", which is a fine thing for a review to say.
 
 Findings you cannot support with something you read stay in your own head. The

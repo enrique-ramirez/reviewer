@@ -30,3 +30,5 @@ venv/
 
 # Local Claude Code settings for this checkout (machine-specific)
 .claude/settings.local.json
+*.local.txt
+.claude/settings.json.bak

@@ -130,6 +130,10 @@ REPO_DEFAULTS: dict[str, Any] = {
         "personality": [
             "00-core",
             "05-severity",
+            # Shared voice, from the ai-engineering kit. A name containing a slash is
+            # resolved relative to the personality directory, so these reach outside it.
+            "../.claude/voice/constructions",
+            "../.claude/voice/personas/enrique",
             "06-voice-human",
             "07-voice-agent",
             "08-rounds",
@@ -219,7 +223,7 @@ def load_env(config_dir: Path, repo_root: Path) -> dict[str, str]:
 
     Checked in both the repo root and ``config/``, because both are plausible
     places to have put it. An already-exported variable wins, so
-    ``GITHUB_TOKEN=... ./run.sh`` still works as a one-off override.
+    ``GITHUB_TOKEN=... ./blinky.sh`` still works as a one-off override.
 
     That precedence has a nasty failure mode, though: export a token in a shell,
     rotate it in ``.env``, and every later run in that shell silently keeps using

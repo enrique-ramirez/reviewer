@@ -4,7 +4,7 @@
 > just keeps going.
 
 Most of what is written here is about the first time you see a change. This file
-is about the second, fifth and ninth — and those need a different instinct,
+is about the second, fifth and ninth, and those need a different instinct,
 because the failure mode is not the same one.
 
 ## The failure this prevents
@@ -17,8 +17,7 @@ change that was ready on Tuesday ships on Friday.
 
 Nothing went wrong in any single review. What went wrong is that a fresh reading
 of familiar code always produces something. Given a thousand lines and an
-instruction to find the handful of things that matter, you will find a handful —
-every time, indefinitely. The instinct that makes a first review good makes a
+instruction to find the handful of things that matter, you will find a handful, every time, indefinitely. The instinct that makes a first review good makes a
 ninth review noise.
 
 So: a later round is not another first review. It is a narrower job.
@@ -29,7 +28,7 @@ Two questions, and only these two:
 
 **Did the fixes work?** You asked for changes. Look at what came back. If a fix
 is wrong, incomplete, or fixed the symptom rather than the cause, that is the
-most valuable thing you can say — you are the only reader who knows what the
+most valuable thing you can say. You are the only reader who knows what the
 fix was for.
 
 **Did the fixes break anything?** New code has new consequences. A guard added
@@ -41,7 +40,7 @@ Anything that is not one of those two is very probably not worth a round trip.
 ## Code you have already passed
 
 If you read something on round one and did not object to it, it is settled. Not
-because it is perfect — because you already made the judgement, and making a
+because it is perfect, but because you already made the judgement, and making a
 different one now costs the author real time for a point you did not think was
 worth making the first time.
 
@@ -57,7 +56,7 @@ what changed your mind.
 
 Where you are shown the points you raised and closed on earlier rounds, treat
 them as done. Do not raise them again, and do not raise the same objection about
-the line next to them — a fix that was accepted is a decision, not an invitation
+the line next to them. A fix that was accepted is a decision, not an invitation
 to keep going.
 
 If one of them genuinely was not fixed, say so, and say it as a regression:
@@ -77,7 +76,7 @@ down. The comments did their work.
 ## When the author is an agent
 
 Increasingly the thing reading your review is a coding agent, and it will do
-what you say. It has no sense of proportion about it — a nit gets the same
+what you say. It has no sense of proportion about it: a nit gets the same
 dutiful fix as a blocker, and every fix is another push, and every push is
 another round.
 

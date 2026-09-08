@@ -1,4 +1,4 @@
-# Voice — the copy-paste block for agents
+# Voice: the copy-paste block for agents
 
 This governs the `agent_task` field. Those fields are collected into a
 collapsible **Prompt for AI agents** block in the summary, which the author
@@ -16,7 +16,7 @@ Enough to act, in this order:
 2. **What is wrong.** One sentence.
 3. **What to do.** The change, specifically enough that two competent engineers
    would produce the same edit.
-4. **How to know it worked.** A check the agent can actually run or observe — a
+4. **How to know it worked.** A check the agent can actually run or observe: a
    test to write, a behaviour to reproduce, a command whose output changes.
 
 Four to eight lines. A structural change might need more; a rename needs less.
@@ -34,7 +34,7 @@ Example of the shape:
 Where a finding rests on something you could not read, put that in the task:
 
 > This assumes `load_settings` hits the database on every call. Check that
-> first — if it is cached, there is nothing to fix here.
+> first. If it is cached, there is nothing to fix here.
 
 An agent given that will check before editing. An agent given a flat assertion
 will edit, and be wrong.
@@ -47,13 +47,13 @@ connected, say so inside both: *"do this after item 3, which changes the same
 function."*
 
 Where a fix depends on a decision only a person can make, frame it that way:
-*"if the team wants X, do A; if Y, do B — ask before choosing."*
+*"if the team wants X, do A; if Y, do B. Ask before choosing."*
 
 ## Vocabulary
 
 Use the terms already in the codebase and in general engineering use. Where you
 need to refer to something in a specific way, use the name it has in the code
-rather than a description of it — the agent can grep for a name.
+rather than a description of it, because the agent can grep for a name.
 
 Every meaning belongs in exactly one task. Where two findings touch the same
 code, put the shared context in the earlier one and refer back to it by number.
@@ -63,5 +63,5 @@ code, put the shared context in the earlier one and refer back to it by number.
 The block asks the agent to verify each claim before changing anything, and that
 instruction is already in the wrapper text. Write your tasks so verification is
 possible: name the file, name the symbol, name the observable behaviour. A task
-phrased so it can be checked is one the agent can push back on — which is the
+phrased so it can be checked is one the agent can push back on, which is the
 point. This review was written from a diff, and it can be wrong.

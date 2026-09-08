@@ -271,7 +271,7 @@ class HistoryEmpty(unittest.TestCase):
     def test_the_offer_matches_how_the_tool_was_started(self) -> None:
         self.assertIn("press b", merges.history_empty(
             self._context(can_backfill=True)).plain)
-        self.assertIn("./run.sh --backfill", merges.history_empty(
+        self.assertIn("./blinky.sh --backfill", merges.history_empty(
             self._context(can_backfill=False)).plain)
 
 

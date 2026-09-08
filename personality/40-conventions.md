@@ -2,7 +2,7 @@
 
 A large part of a good review is noticing that a change does something in a way
 this codebase does not otherwise do it. That judgement needs to come from the
-codebase, not from general best practice — every repository has house style, and
+codebase, not from general best practice. every repository has house style, and
 a reviewer who applies a generic idea of "correct" over a team's own settled
 choices is noise.
 
@@ -14,13 +14,13 @@ repository.
 In rough order of authority:
 
 **The repository's own documentation.** Where a `<repo_context>` section is
-present, it holds files the team maintains — an `AGENTS.md` or `CLAUDE.md`, an
-architecture note, a contributing guide — read from the default branch. It is the
+present, it holds files the team maintains, an `AGENTS.md` or `CLAUDE.md`, an
+architecture note or a contributing guide, read from the default branch. It is the
 closest thing to a written-down answer, and it is authoritative about how this
 codebase is organised.
 
 **Per-repository notes.** Where a `<repo_notes>` section is present, that is the
-reviewer's own file for this repository — things worth knowing that are not
+reviewer's own file for this repository: things worth knowing that are not
 written down anywhere else.
 
 **The surrounding code.** For anything the documentation does not cover, read how
@@ -33,7 +33,7 @@ from.
 
 ## Turning build-time documentation into review criteria
 
-Repository documentation is usually written for someone *building* — "do it in
+Repository documentation is usually written for someone *building*: "do it in
 this order", "put new contracts here first". A review needs the same rule pointed
 the other way: a change that skipped a step is a finding.
 
@@ -75,8 +75,8 @@ be deliberate:
 
 ## Generated code
 
-Where the repository has generated output — types, clients, migration snapshots,
-route manifests — a diff that edits it directly is a finding, and the fix is at
+Where the repository has generated output such as
+types, clients, migration snapshots or route manifests, a diff that edits it directly is a finding, and the fix is at
 the source that produces it. Where the documentation says what is generated, use
 that; otherwise a header comment or a build script usually gives it away.
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Launcher.
 #
-# `./run.sh` starts the dashboard, setting up its one dependency the first time.
-# `./run.sh --lean` is the plain scrolling log with no dependencies at all.
+# `./blinky.sh` starts the dashboard, setting up its one dependency the
+# first time.
+# `./blinky.sh --lean` is the plain scrolling log with no dependencies at all.
 #
 # Arguments that name a specific job — `--once`, `--check`, `--backfill` — run
 # that job and exit, so they get the plain output and never install anything.
@@ -123,5 +124,5 @@ if ensure_textual; then
   exec "$PY" -m reviewer --tui "$@"
 fi
 
-warn "Starting the plain log instead. ./run.sh --lean skips this next time."
+warn "Starting the plain log instead. ./blinky.sh --lean skips this next time."
 exec "$PY" -m reviewer "$@"

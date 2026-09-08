@@ -19,13 +19,13 @@ Everything the [README](README.md) skipped over. Start anywhere.
 
 ## The dashboard
 
-Three tabs, and the underlined letter in each name is its key — `d`, `s`, `h` —
+Three tabs, and the underlined letter in each name is its key, `d`, `s`, `h`,
 working from anywhere.
 
 Everything fits one screen at any terminal size: the tables shrink to the space
 available rather than the window growing past the bottom.
 
-What is true of the *run* sits in the header, next to the clock — the countdown
+What is true of the *run* sits in the header, next to the clock: the countdown
 to the next scan, or the phase and elapsed time while one is going. What is true
 of the *list* you are looking at sits under it, inside its column, with the
 divider running past to say so: how many rows, which page, and the filters at the
@@ -35,17 +35,17 @@ and gives its ten lines back to whichever table you are on, which is worth
 knowing on a short terminal. It keeps recording while hidden, so bringing it back
 shows what you missed.
 
-### Dashboard — what is open right now
+### Dashboard: what is open right now
 
 Every open pull request, sorted so the ones wanting a human are at the top, with
 a detail pane beside it and the log underneath.
 
-The **Open** column is how long the pull request has been sitting there — not how
+The **Open** column is how long the pull request has been sitting there, not how
 long since anyone looked at it. It turns yellow after a week and red after a
 month, so a change nobody is landing is visible without reading the number.
 
 A pull request being worked on shows a spinner and a running clock: `⠹ reviewing
-4m` on the board, `⠹ reviewing right now — 4m 12s` in the detail pane, and the
+4m` on the board, `⠹ reviewing right now · 4m 12s` in the detail pane, and the
 elapsed time beside the phase in the header. A review is minutes of work,
 and until it finishes the row would otherwise show the previous pass's verdict as
 though it were current.
@@ -56,7 +56,7 @@ has done:
 
 | status | meaning |
 | --- | --- |
-| `needs sign-off` | someone reviewed it without approving — including the case where the reviewer found it clean and left the approval to a human |
+| `needs sign-off` | someone reviewed it without approving, including the case where the reviewer found it clean and left the approval to a human |
 | `needs 1 more` | approved, but branch protection wants another approving review |
 | `changes req.` | a reviewer asked for changes |
 | `awaiting review` | a reviewer was requested and has not looked yet |
@@ -70,20 +70,20 @@ The board answers "what wants me" before you read a word of it:
 
 | colour | means |
 | --- | --- |
-| red | something is wrong or blocked — deal with it |
+| red | something is wrong or blocked; deal with it |
 | yellow | waiting on you specifically, and on nobody else |
 | green | settled and good; merge it when you like |
 | cyan | done, nothing outstanding from anyone |
 | grey | nothing has happened yet |
 | magenta | happening right now |
 
-So `reviewed` is cyan — we left comments and the ball is with the author — while
+So `reviewed` is cyan, because we left comments and the ball is with the author, while
 `needs sign-off` is yellow, because that one is waiting on a human. The
 distinction that matters most is exactly that one: "we reviewed it and nothing is
 outstanding" and "somebody has to sign this off" are opposite answers to "does
 this want me", and sharing a colour made the board lie.
 
-### Summary — what landed while you were watching
+### Summary: what landed while you were watching
 
 This run, and only this run. When a pull request the reviewer looked at leaves
 the open list having been merged, it moves here with a sentence on *what actually
@@ -92,8 +92,8 @@ changed*.
 Each entry carries the size, the author, who merged it, how long it stayed open,
 and how many comments we left before it landed.
 
-The detail pane is three named sections — **what it changed**, **the change**,
-**our part in it** — with the summary given a bar down its edge, because on a
+The detail pane is three named sections, **what it changed**, **the change**,
+**our part in it**, with the summary given a bar down its edge, because on a
 merged pull request that sentence is the thing you came to read and everything
 else is context for it. Underneath sit two buttons: whatever there is to do with
 this record on the left, the way out to GitHub on the right. Each one underlines
@@ -105,11 +105,11 @@ tools and no checkout, written once and kept; and where the reviewer already
 described the change during its review, that description is reused and no diff is
 fetched at all.
 
-### History — everything on record
+### History: everything on record
 
 The same record without the time limit, across every repository you watch.
-Filter by author with `/` — which answers "what has this person shipped since
-March" — pick a date range from the **dates** control with `t`, and clear the lot
+Filter by author with `/`, which answers "what has this person shipped since
+March", pick a date range from the **dates** control with `t`, and clear the lot
 with `Escape`.
 
 The date control shows the range as well as setting it, so there is no separate
@@ -120,7 +120,7 @@ to reach the one you wanted. `t` opens the list; the arrows and `Enter` choose;
 It is paged rather than scrolled: a page is however many rows your window can
 show, and only that many are read from the database, so a history of two thousand
 merges costs the same to open as one of twenty. **Moving down past the last row
-turns the page** — `j` and the arrows carry on rather than stopping — and `[` /
+turns the page**, so `j` and the arrows carry on rather than stopping, and `[` /
 `]` or `PgUp` / `PgDn` jump a page at a time. The status line says which page of
 how many you are on, which is the thing an endless scroll cannot tell you.
 
@@ -130,9 +130,9 @@ It lives in the same SQLite database as the rest of the state, under
 ### Keys
 
 The footer follows the tab you are on, so it only ever offers keys that do
-something where you are — and it is the only place the keys are listed. There
-used to be a second, dimmer list above the status line; two copies of the same
-thing meant the one you could read was the one that was out of date.
+something where you are, and it is the only place the keys are listed. One
+list rather than two, because the copy you could read would be the copy that
+was out of date.
 
 | key | tab | does |
 | --- | --- | --- |
@@ -140,15 +140,15 @@ thing meant the one you could read was the one that was out of date.
 | `o` / `Enter` | any | open the selected pull request in your browser |
 | `j` / `k` | any | move |
 | `l` | any | hide/show the log pane |
-| `r` | any | scan now — cuts the wait short and starts the next pass |
+| `r` | any | scan now, cuts the wait short and starts the next pass |
 | `p` | any | pause the countdown, and let it go again |
-| `q` | any | quit — it asks first, and says what it is about to throw away |
+| `q` | any | quit; it asks first, and says what it is about to throw away |
 | `/` | History | filter by author |
 | `t` | History | open the date-range picker |
 | `[` `]` / `PgUp` `PgDn` | History | turn the page |
 | `j` / `k` at a page edge | History | carries on to the next page |
 | `b` | History | fill in past history (press again to stop) |
-| `g` | History | write a summary for the selected merge — one model call |
+| `g` | History | write a summary for the selected merge, one model call |
 | `c` | any | read the review conversation without leaving the terminal |
 | `x` | Dashboard | stop the review running on the selected row |
 | `Escape` | History | clear the filters |
@@ -157,12 +157,12 @@ thing meant the one you could read was the one that was out of date.
 
 `r` does two things: redraws from the database, and asks the worker to stop
 waiting and start the next pass. The countdown in the header switches to
-`scanning…` straight away — the pass itself runs on another thread, so without
+`scanning…` straight away, because the pass itself runs on another thread, so without
 that the key looked like it had done nothing on a board where nothing had
 changed. Pressed while a pass is already running it says so rather than queueing
 a second one.
 
-`p` holds the countdown where it is — the track keeps its place so you can see
+`p` holds the countdown where it is: the track keeps its place so you can see
 how much of the wait you are holding, Pac-Man stops chewing, and the header
 reads `paused at 6m12s`. It stops the *timer*, not the work: a pass already
 under way runs to the end, because abandoning a review halfway is a much bigger
@@ -171,10 +171,10 @@ rather than firing immediately, which is why the wait is carried as a remaining
 duration rather than a deadline.
 
 `r` and `p` compose. Asking for a scan while paused runs one pass and leaves the
-pause set — a standing setting and a one-off, and neither silently undoes the
+pause set: a standing setting and a one-off, and neither silently undoes the
 other.
 
-Quitting — or `Ctrl-C`, which does not stop to ask — kills any model call in
+Quitting, or `Ctrl-C`, which does not stop to ask, kills any model call in
 flight rather than letting it finish. A review whose result nobody is left to
 post is worth nothing, so finishing it would buy the bill and no review. Nothing
 part-done is posted or recorded: the pull request is left exactly as it was, and
@@ -186,11 +186,11 @@ A live row says how long it has been going. Two things can make that number
 look worse than it is, and the board says which:
 
 ```
-⠹ reviewing right now — 15m 40s  (12m of that asleep)  · reading auth.py
+⠹ reviewing right now · 15m 40s  (12m of that asleep)  · reading auth.py
 ```
 
 **Time asleep.** Close the lid and the clock a person reads keeps counting while
-the review does not. The reviewer's own timeout does not count that time —
+the review does not. The reviewer's own timeout does not count that time, because
 a call frozen by a suspend never got a chance to make progress, and charging it
 for the hours your laptop was shut would kill work that was about to succeed. So
 elapsed time and the timeout genuinely disagree, and the line says by how much
@@ -198,7 +198,7 @@ rather than leaving you to wonder.
 
 **Silence.** With `claude` the review streams as it happens, so the board can
 say what the model is doing right now. If nothing arrives for ten minutes the
-row turns red and says `quiet 12m` instead — how long it has been silent, not
+row turns red and says `quiet 12m` instead: how long it has been silent, not
 how long it has been running. That is the number worth reading: a review twenty
 minutes in that spoke four seconds ago is working; one that has said nothing for
 twenty minutes is not.
@@ -206,18 +206,18 @@ twenty minutes is not.
 Ten minutes rather than something tighter because the stream carries one event
 per *turn*, not per token, and the final write-up is a single turn that can run
 for minutes with nothing to show. The other providers do not stream at all, so
-they never report silence and never look quiet — there is genuinely nothing to
+they never report silence and never look quiet, because there is genuinely nothing to
 go on, and saying so beats guessing.
 
 Nothing is killed automatically on either signal. A review is minutes of work
 and real quota, and from outside the process a slow call and a stuck one look
-identical — so the board shows what it can actually see and leaves the call to
+identical, so the board shows what it can actually see and leaves the call to
 you. **`x`** stops the one under the cursor; the pass moves on to the next pull
 request and the next run picks this one up from the start.
 
 The backstop is still there: a call that spends `timeout_seconds` awake without
 finishing is given up on. `max_tick_seconds` is the matching limit for a whole
-pass — with reviews running one at a time, `max_reviews_per_tick` bounds the
+pass, and with reviews running one at a time, `max_reviews_per_tick` bounds the
 count but not the time, and without it the repositories at the end of the list
 can wait on everything ahead of them. Neither one interrupts a review that has
 already started.
@@ -226,13 +226,13 @@ already started.
 
 Press **`c`** on any pull request and the review conversation opens in the
 terminal: every comment thread with what was said, who said it, whether it was
-resolved, and a link back to it — followed by the submitted reviews. Ours are
+resolved, and a link back to it, followed by the submitted reviews. Ours are
 marked. `r` asks GitHub again, `Escape` closes it.
 
 It is **fetched, not stored**, and that is the whole design:
 
 - Everything already on record would show nothing under a scheme that only kept
-  what this tool wrote from today onward — including all of backfilled history.
+  what this tool wrote from today onward, including all of backfilled history.
 - A stored copy is a snapshot of what *we* posted. It cannot show the reply that
   came after it.
 - **Resolution happens somewhere else.** A thread the author settled in the
@@ -245,14 +245,14 @@ so flicking back to a pull request you already opened is instant.
 
 A busy repository can carry thirty reviews from three different bots. Every
 review of ours is shown; the rest are capped at the most recent few, and the
-screen says how many it left out — a cap nobody is told about reads as "that was
+screen says how many it left out. a cap nobody is told about reads as "that was
 all of it".
 
 ## More than one repository
 
 Watching two or more adds a sidebar down the left listing them. Each entry
-carries its owner and how it is doing — how many pull requests are open, how many
-this tool has reviewed, and how many want a human — plus a spinner against
+carries its owner and how it is doing: how many pull requests are open, how many
+this tool has reviewed, and how many want a human, plus a spinner against
 whichever is being reviewed right now.
 
 Those counts cover every repository you watch, not just the one in view, so the
@@ -278,7 +278,7 @@ Click a row to switch to it, or press `e` to hand the arrow keys to the sidebar
 and `Escape` to give them back. The choice scopes all three tabs at once, so
 switching repository means the same thing wherever you are.
 
-`E` folds it down to a rail rather than hiding it — one Pac-Man ghost per
+`E` folds it down to a rail rather than hiding it: one Pac-Man ghost per
 repository, still yellow if something there wants you, and still clickable. A
 sidebar that disappeared would take the fact that there *are* other repositories
 with it. With a single repository configured it never appears, and neither key is
@@ -297,8 +297,8 @@ runs stops it, keeping everything already fetched.
 The same thing from the command line:
 
 ```sh
-./run.sh --backfill            # asks how far back
-./run.sh --backfill month      # or name a range up front
+./blinky.sh --backfill            # asks how far back
+./blinky.sh --backfill month      # or name a range up front
 ```
 
 Ranges are `yesterday`, `week`, `month`, `quarter`, `year`, `all`.
@@ -307,14 +307,14 @@ Ranges are `yesterday`, `week`, `month`, `quarter`, `year`, `all`.
   acme/platform: 1,594 merged pull request(s) over everything, about 16
   request(s), no model calls
 
-  That is 1,594 pull requests — a large sweep. It makes no model calls,
+  That is 1,594 pull requests, a large sweep. It makes no model calls,
   so the cost is time and API quota rather than tokens…
 
   Go ahead? [y/N]
 ```
 
 Two things worth knowing. It records **everything merged**, not only what this
-tool reviewed — history that only covered our own reviews would answer almost
+tool reviewed. history that only covered our own reviews would answer almost
 nothing about a repository that predates it. And it makes **no model calls**:
 backfilled entries show the pull request's own title rather than a written
 summary, which is what keeps a whole-history sweep essentially free. Anything
@@ -325,17 +325,17 @@ it again skips what is already on record. Each repository is tracked separately.
 
 ### Summarising one of them anyway
 
-Free history is the right default — a sweep of two thousand merges should not
+Free history is the right default: a sweep of two thousand merges should not
 cost two thousand model calls. But the odd row is worth reading properly, and
 that is what `g` is for: put the cursor on any merge in the History tab and press
 it.
 
-What comes back is stored exactly as a summary written during a tick would be —
+What comes back is stored exactly as a summary written during a tick would be:
 same column, same source, kept for good. Read it once and it is there next time;
 nothing re-asks for it, and nothing overwrites it.
 
 - It reads the pull request and its file list from GitHub, then makes **one**
-  model call, on whatever `merge_summary` is pointed at — the cheapest tier you
+  model call, on whatever `merge_summary` is pointed at, the cheapest tier you
   have configured.
 - Rows that already carry a written summary are refused rather than rewritten, so
   a stray keypress cannot buy the same sentence twice.
@@ -360,7 +360,7 @@ Every tick, for each repository:
 5. Calls the model **once**.
 6. Validates every proposed comment line against the real diff hunks, then posts.
 7. Resolves threads that no longer apply, and replies to threads the author has
-   pushed back on — after checking the pushback against the code.
+   pushed back on, after checking the pushback against the code.
 8. Notices anything it reviewed that has since merged, and records what it was.
 
 The gates, all per repository and all switchable:
@@ -369,14 +369,14 @@ The gates, all per repository and all switchable:
 | --- | --- | --- |
 | `skip_drafts` | on | the PR is a draft |
 | `skip_own_prs` | on | you wrote it |
-| `skip_if_approved_by_others` | on | someone already approved — unless a re-review was requested from you |
+| `skip_if_approved_by_others` | on | someone already approved, unless a re-review was requested from you |
 | `require_ci_green` | on | CI is failing or still running |
 | `blocking_labels` | — | any of these labels is present |
 | `required_labels` | — | none of these labels is present |
 | `only_if_review_requested` | off | you are not a requested reviewer |
 | `base_branches` | — | the PR targets a branch outside the list |
 
-A PR is normally reviewed once per head SHA — a second review of the same commit
+A PR is normally reviewed once per head SHA. a second review of the same commit
 is refused, which is what stops a crash between "GitHub accepted it" and "state
 recorded it" from posting twice. **Clicking "Re-request review" overrides that.**
 It has to: a PR whose comments are all resolved but whose last review was a
@@ -390,12 +390,12 @@ The diff is compressed in three tiers before it goes anywhere, and everything
 dropped or shortened is named in the summary comment, so a reviewed PR always
 says what was not read:
 
-- **`exclude`** — lockfiles, snapshots, build output, images. The model is told
+- **`exclude`**: lockfiles, snapshots, build output, images. The model is told
   the file changed and by how many lines, and nothing else.
-- **`summarize_only`** — migrations and `.sql` by default. Path, line counts and
+- **`summarize_only`**: migrations and `.sql` by default. Path, line counts and
   hunk headers only, so it can still say "this migration changed, worth a human
   glance" without reading 9,000 generated lines.
-- **`max_file_lines` / `max_total_lines`** — a single long patch is sent
+- **`max_file_lines` / `max_total_lines`**: a single long patch is sent
   head-and-tail with an elision marker; over the total budget, files are dropped
   lowest-risk first.
 
@@ -410,12 +410,12 @@ of snapshot and +900 lines of real code counts as 900.
 | Nits or correctness only | `COMMENT`, with an offer to approve as-is if you would rather not take them | still needs an approval |
 | Nothing | `APPROVE` | unblocked |
 
-Resolving a conversation does not by itself unblock merging — a
+Resolving a conversation does not by itself unblock merging. a
 `REQUEST_CHANGES` review blocks until the same reviewer submits a new one. The
 unblock always comes from a later `APPROVE`.
 
 A PR with unaddressed nits and a silent author waits indefinitely, on purpose.
-Re-request a review to break that tie — see the note under the gates above.
+Re-request a review to break that tie; see the note under the gates above.
 
 `approval.manual_only_when` holds a PR back for you even when the review is
 clean: too many changed lines, a label, or a path pattern like
@@ -423,8 +423,8 @@ clean: too many changed lines, a label, or a path pattern like
 when a review finishes, so the board can tell you a PR is going to land on you
 while its author is still working on it. Two marks, deliberately different:
 
-- **`?` needs your approval** — clean, waiting on you now.
-- **`◦` will need you** — held by the same rules, but changes are still
+- **`?` needs your approval**: clean, waiting on you now.
+- **`◦` will need you**: held by the same rules, but changes are still
   requested, so it is the author's move.
 
 Both show the reason in the detail pane. Only the first is counted: "3 need you"
@@ -433,7 +433,7 @@ right now. A mark that means "this is coming" is worth having on the row and
 would be a lie in a count.
 
 The legend under the board explains **the marks currently on it**, not every
-mark that exists, and it is fitted to the pane — when there is not room, the
+mark that exists, and it is fitted to the pane: when there is not room, the
 least urgent entries give way to a `+2 more`. A one-line bar that overflows gets
 cut wherever the pane ends, which is how you end up reading "? needs your".
 
@@ -461,8 +461,8 @@ After that, four things are different:
 
 The severity bar is enforced twice: `personality/08-rounds.md` asks the model
 for the restraint, and the pipeline filters anything that gets through anyway.
-Held-back findings are dropped rather than moved into the summary — the point is
-silence — but the summary says how many there were, so nothing disappears
+Held-back findings are dropped rather than moved into the summary, since the point is
+silence, but the summary says how many there were, so nothing disappears
 without a trace.
 
 This matters most when the author is an agent. An agent fixes a nit as dutifully
@@ -471,16 +471,16 @@ comments. A nit that a person would weigh and decline costs an agent-authored PR
 a full cycle.
 
 An incremental round falls back to the full diff when the delta cannot be worked
-out — usually a force-push that orphaned the previously reviewed SHA. Files that
+out, usually a force-push that orphaned the previously reviewed SHA. Files that
 arrive from a base-branch merge are filtered out, so a `main` merge does not read
 as work the author did.
 
 ## Two voices, one call
 
 Each finding carries both a `human` rendering and an `agent_task` rendering. The
-inline comments use `human` — plain language, aimed at a person, with a concrete
+inline comments use `human`: plain language, aimed at a person, with a concrete
 "if a user does X, then Y happens" wherever a failure can be described that way.
-The collapsible **Prompt for AI agents** block uses `agent_task` — imperative and
+The collapsible **Prompt for AI agents** block uses `agent_task`: imperative and
 specific, and it asks the agent to verify each claim against the code rather than
 apply the changes on faith.
 
@@ -506,7 +506,7 @@ Five are the general reviewer and assume nothing about the stack:
 
 Three more are opt-in specialisms, added per repository in
 `review.personality`: `10-frontend`, `20-accessibility`, `30-shareability`. Write
-your own alongside them — any `personality/<name>.md` can be listed.
+your own alongside them; any `personality/<name>.md` can be listed.
 
 `00-core.md` is the one to read first. Its opening line sets whose review this
 is, and everything else follows from it.
@@ -515,8 +515,8 @@ is, and everything else follows from it.
 
 Three layers, in order of how specific they are:
 
-1. **`personality/`** — how you review anything. Portable; it comes with you.
-2. **The repository's own docs** — `AGENTS.md`, `CLAUDE.md`, and whatever else
+1. **`personality/`**: how you review anything. Portable; it comes with you.
+2. **The repository's own docs**: `AGENTS.md`, `CLAUDE.md`, and whatever else
    `repo_context.paths` matches, read from the default branch. Whichever agent
    the team wrote them for; this has nothing to do with which provider does the
    reviewing. This is where a
@@ -524,11 +524,11 @@ Three layers, in order of how specific they are:
    should live, because the team maintains it and it stays current without anyone
    remembering to update a second copy. The reviewer treats departures from it as
    findings and quotes it when raising one.
-3. **`config/repos/<name>.md`** — optional notes for one repository, sitting next
+3. **`config/repos/<name>.md`**: optional notes for one repository, sitting next
    to its JSON config. Picked up automatically; no config key. For things that
    belong to you rather than the team.
 
-Repository docs are read from the **default branch**, not the PR branch —
+Repository docs are read from the **default branch**, not the PR branch.
 otherwise a pull request could ship instructions to its own reviewer, which
 matters because this tool can approve. A PR that modifies those files is surfaced
 as a finding.
@@ -544,21 +544,21 @@ The model is called as a pure function: compressed diff and PR context in,
 structured JSON out. It can read a clean checkout of the PR head, so it can look
 at surrounding code to judge whether a change follows the repo's conventions. It
 cannot write, cannot run a build, cannot reach the network, and never sees a
-GitHub token — that is stripped from the child environment along with anything
+GitHub token, since that is stripped from the child environment along with anything
 else GitHub-shaped.
 
 Its working directory is an empty scratch dir, never the checkout. All of these
-CLIs auto-load instructions from wherever they start — `CLAUDE.md`, `AGENTS.md`,
-`GEMINI.md` — so starting one inside the tree it is reviewing would let a pull
+CLIs auto-load instructions from wherever they start, whether `CLAUDE.md`, `AGENTS.md`,
+`GEMINI.md`, so starting one inside the tree it is reviewing would let a pull
 request write instructions to its own reviewer. The checkout is named in the
 prompt and reached by absolute path instead.
 
 *How* reading is confined depends on which CLI you point it at, and the
-difference is worth knowing before you switch — see
+difference is worth knowing before you switch; see
 [Which model reviews](#which-model-reviews).
 
 Everything that touches GitHub is done by the script, from JSON the script
-validated first — including checking that every comment line actually exists in
+validated first, including checking that every comment line actually exists in
 the diff before posting.
 
 ### Your working copy
@@ -587,7 +587,7 @@ config: a review spends the quota that CLI already has.
 | `type` | Runs | How reading is fenced off |
 |---|---|---|
 | [`claude`](#claude-code) | `claude -p` | Tool allowlist **and** denylist |
-| [`codex`](#codex) | `codex exec --sandbox read-only` | Filesystem sandbox — [wider](#codex) |
+| [`codex`](#codex) | `codex exec --sandbox read-only` | Filesystem sandbox, [wider](#codex) |
 | [`gemini`](#gemini-cli) | `gemini --output-format json` | Tool allowlist, writes refused at approval |
 | [`command`](#command) | anything you name | Nothing. You vouch for it |
 
@@ -599,7 +599,7 @@ Two lines pick one:
 ```
 
 An entry named after a known type does not have to repeat it. Any other name is
-a profile and must say what it is — which is how you keep two settings of the
+a profile and must say what it is, which is how you keep two settings of the
 same CLI around:
 
 ```json
@@ -609,7 +609,7 @@ same CLI around:
 ```
 
 Bad names are caught at startup, not fifteen minutes into a watch loop on the one
-pull request that needed the call. `./run.sh --check` goes further and confirms
+pull request that needed the call. `./blinky.sh --check` goes further and confirms
 every CLI a tick could reach for is actually on `PATH` and runs.
 
 ### Per repository
@@ -633,12 +633,12 @@ the block with every key blank.
 
 Not every call is a review. Two of them are much smaller jobs, and each has its
 own block in `global.json` that layers over whatever provider the repo resolved
-to — plan on the expensive model, follow up on a cheap one:
+to: plan on the expensive model, follow up on a cheap one:
 
 | Block | What it is | Sends a diff? | Tools? |
 |---|---|---|---|
 | *(the review)* | The full pass over a PR | Yes, the whole bundle | Yes |
-| `thread_reply` | Answering one thread that has a new reply | **No** — just the conversation | Yes |
+| `thread_reply` | Answering one thread that has a new reply | **No**, just the conversation | Yes |
 | `merge_summary` | The one-line "what changed" on the Summary tab | No | **No** |
 
 ```json
@@ -649,7 +649,7 @@ to — plan on the expensive model, follow up on a cheap one:
 `thread_reply` keeps its tools because checking whether a claim holds up against
 the code is most of the point of answering. `merge_summary` drops them because it
 has nothing to look at. Setting `provider` on either sends that kind of call to a
-different CLI entirely, and drops any repo-level model pin along with it — a
+different CLI entirely, and drops any repo-level model pin along with it, since a
 model name pinned for one provider means nothing to another.
 
 ### What every provider does the same way
@@ -659,12 +659,12 @@ rest on them rather than on any one vendor's flags:
 
 - **The prompt goes in on stdin**, never as an argument. A review bundle would
   hit `ARG_MAX` long before it hit anything else.
-- **The working directory is an empty scratch dir**, never the checkout — see
+- **The working directory is an empty scratch dir**, never the checkout; see
   [above](#what-the-model-can-and-cannot-do) for why that one matters most.
 - **`GITHUB_TOKEN` and friends are stripped** from the child environment.
 - **The call is killed on quit**, along with any children it spawned.
 
-`allowed_tools` is written in one vocabulary — `Read`, `Glob`, `Grep` — and each
+`allowed_tools` is written in one vocabulary, `Read`, `Glob`, `Grep`, and each
 adapter translates it into whatever its CLI calls those things. Those happen to
 be Claude Code's names, because that is what this config already spoke; they are
 the canonical spelling here rather than a statement about which provider is
@@ -672,7 +672,7 @@ in charge. Names an adapter does not recognise are passed through untouched, so
 a provider-specific list works too.
 
 CLI flags drift between releases faster than any adapter can. Every provider's
-`extra_args` is appended verbatim to each invocation — that is the escape hatch,
+`extra_args` is appended verbatim to each invocation. that is the escape hatch,
 and reaching for it is expected rather than a sign something is wrong.
 
 ### What changes when you switch
@@ -691,10 +691,10 @@ hope about the model.
 
 It is also the only one that reports as it goes rather than printing everything
 at the end, which is what lets the dashboard say what the model is reading right
-now — and, more usefully, tell a review that has gone silent apart from one that
+now, and, more usefully, tell a review that has gone silent apart from one that
 is merely slow. See [when a review is taking a while](#when-a-review-is-taking-a-while).
 
-- `allowed_tools` is passed through unchanged — these are its own tool names.
+- `allowed_tools` is passed through unchanged, since these are its own tool names.
 - The denylist (`Bash`, `Write`, `Edit`, `WebFetch`, `Task`, …) is sent on every
   call, including the tool-less merge summary.
 - The system prompt travels in `--append-system-prompt`, separate from the diff.
@@ -705,14 +705,14 @@ is merely slow. See [when a review is taking a while](#when-a-review-is-taking-a
 `"type": "codex"` · `codex exec --sandbox read-only --skip-git-repo-check`
 
 - **Its read-only sandbox is read-only about *writing*.** Within it the model may
-  run read-only shell commands, and may read paths outside the checkout —
+  run read-only shell commands, and may read paths outside the checkout,
   including the rest of your home directory. That is a wider read surface than
   the two allowlist-based providers, where the tool list is the boundary. It
   still cannot write, install, or reach the network, and the token is stripped
-  either way — but if the scoping above is why you run this tool, that is the
+  either way, but if the scoping above is why you run this tool, that is the
   line that moves.
 - **`allowed_tools` is not read.** There is no tool list to apply it to, so
-  setting it there does nothing — including the empty list the merge summary
+  setting it there does nothing, including the empty list the merge summary
   uses, which means summaries run with the same sandbox as reviews rather than
   with nothing.
 - **No `--append-system-prompt`.** Your personality is folded into the top of the
@@ -729,7 +729,7 @@ is merely slow. See [when a review is taking a while](#when-a-review-is-taking-a
 
 - **Writes are blocked by withholding approval, not by dropping the tools.** A
   write needs a confirmation a non-interactive run cannot give, so it fails.
-  **Do not put `--approval-mode yolo` in `extra_args`** — one flag is all that
+  **Do not put `--approval-mode yolo` in `extra_args`**. one flag is all that
   stands between this and a model with edit rights on the checkout.
 - `--include-directories` grants write access as well as read, which is why the
   point above is load-bearing rather than belt-and-braces.
@@ -745,7 +745,7 @@ The escape hatch: any CLI that takes a prompt on stdin and prints an answer on
 stdout. Requires an explicit `command`; there is no default to guess.
 
 - **Nothing here can restrict what that command does.** It gets whatever it gives
-  itself — no allowlist, no sandbox, no denylist. Point it at something
+  itself: no allowlist, no sandbox, no denylist. Point it at something
   read-only, and treat it as a program you are vouching for.
 - The system prompt is folded into the message; the reply is read straight from
   stdout with no envelope to unwrap.
@@ -766,13 +766,12 @@ Create a **fine-grained** token at
 
 `Commit statuses` and `Actions` are what let it see whether CI is green. The
 permission that covers CI properly is `Checks`, and GitHub
-[does not offer it on fine-grained tokens](https://github.com/orgs/community/discussions/179545)
-— only on GitHub Apps. Without it GitHub refuses the `statusCheckRollup` GraphQL
+[does not offer it on fine-grained tokens](https://github.com/orgs/community/discussions/179545), only on GitHub Apps. Without it GitHub refuses the `statusCheckRollup` GraphQL
 field, so the reviewer falls back to the Actions API (everything in Actions, but
 not a check posted by a third-party App) or to commit statuses (integrations that
 post statuses, but not Actions check runs). `--check` reports which fallbacks the
 token reaches and the `gates.ci_source` value that goes with each. If none of
-them reaches anything, every PR is skipped with a message saying so —
+them reaches anything, every PR is skipped with a message saying so,
 deliberately, since a reviewer that cannot see CI would otherwise approve pull
 requests with failing builds. `gates.require_ci_green: false` opts out of that.
 
@@ -784,12 +783,12 @@ commit, create a branch, or merge anything, whatever else goes wrong.
 
 `Pull requests: Read and write` is the minimum that allows posting reviews,
 replying and resolving conversations. It also allows submitting an **approving**
-review, which satisfies branch protection. That is deliberate — see
-`approval.mode` — but it is real authority.
+review, which satisfies branch protection. That is deliberate, see
+`approval.mode`, but it is real authority.
 
 The token is never placed in the model's environment.
 
-`./run.sh --check` probes each of these one at a time and names the exact
+`./blinky.sh --check` probes each of these one at a time and names the exact
 permission behind any failure, along with the account the token belongs to and
 whether every configured model CLI is reachable. Run it whenever the token
 changes.
@@ -810,7 +809,7 @@ changes.
 No organisation name, username or filesystem path appears in any tracked file.
 
 Only two values are actually required: `GITHUB_TOKEN` in `.env` and `repo` in the
-repo config. Everything else has a default — including your GitHub username,
+repo config. Everything else has a default, including your GitHub username,
 which is read from the token rather than typed twice. Set `identity` explicitly
 only if you want it checked; a value that disagrees with the token is an error
 rather than something the reviewer works around.
@@ -820,14 +819,14 @@ are stripped on load, so the file you edit explains itself and there is no secon
 copy to drift.
 
 State and logs go to `~/.local/state/blinky/`, deliberately outside the
-checkout — they hold PR titles and, under `--debug`, diff content. Logs record
+checkout, since they hold PR titles and, under `--debug`, diff content. Logs record
 repo, PR number, decision and token counts; diff and comment bodies are written
 only when you pass `--debug`.
 
 ## Command line
 
 ```
-./run.sh [options]
+./blinky.sh [options]
 
   --init              Write the config files by asking a few questions, then
                       exit. Never overwrites; safe to re-run.
@@ -848,8 +847,7 @@ only when you pass `--debug`.
   --config-dir PATH   Override ./config
 ```
 
-Arguments that name a specific job — `--init`, `--check`, `--once`, `--backfill`
-— run it and exit, so they print plainly and install nothing. Modifiers like
+Arguments that name a specific job, `--init`, `--check`, `--once`, `--backfill`, run it and exit, so they print plainly and install nothing. Modifiers like
 `--debug`, `--dry-run` and `--repo` keep the dashboard, since they still mean the
 watch loop. A pipe or a cron job gets the plain log automatically; there is no
 terminal to draw a dashboard on.
@@ -861,7 +859,7 @@ is still working is skipped rather than queued, so a slow review cannot pile up.
 ### What a review cost
 
 Every pass records what it took, and the detail panes show it. On the Dashboard,
-under `last pass` — the most recent round:
+under `last pass`, the most recent round:
 
 ```
 last pass
@@ -882,7 +880,7 @@ cost       4m 46s · 86.3k tokens · $0.448   claude · claude-opus-5
 apart because only the fresh half responds to trimming a prompt, and the two are
 billed nothing like the same.
 
-Every part is conditional, because providers report different things — Claude
+Every part is conditional, because providers report different things: Claude
 Code gives a price, others give tokens and no price, some give neither. A
 provider that reported nothing drops the line rather than printing a zero, and so
 do reviews from before this was recorded: *nobody counted* and *it cost nothing*
@@ -891,7 +889,7 @@ look identical on screen and mean opposite things.
 ### What a dry run tells you about cost
 
 Every model call in a dry run logs what its prompt was made of, largest section
-first — the place to find out whether `max_total_lines` or `personality/` is what
+first, the place to find out whether `max_total_lines` or `personality/` is what
 is actually costing you:
 
 ```
@@ -899,7 +897,7 @@ is actually costing you:
   system
     repository documentation              9,841     2,660
     following the local shape             4,013     1,085
-    voice — the comments people read      3,956     1,069
+    voice: the comments people read      3,956     1,069
   user
     diff                                 36,009     9,732
     pr description                          899       243
@@ -911,8 +909,8 @@ is actually costing you:
   out                                               1,130
 ```
 
-Read it in three parts. **Sections** are estimated from character counts — no
-tokeniser ships with the standard library — so treat them as ±15% and as a way to
+Read it in three parts. **Sections** are estimated from character counts, since no
+tokeniser ships with the standard library, so treat them as ±15% and as a way to
 compare rows against each other, which is what tuning needs. **CLI overhead** is
 the coding-agent CLI's own system prompt and tool definitions; it is real, it is
 usually the second-largest line, and nothing in this repository can change it.
@@ -925,7 +923,7 @@ With `--debug` the same table is written to `tokens-<axis>.txt` in the state dir
 ## Roadmap
 
 - **CI**, once the tests can run on a hosted runner.
-- **Richer per-repository health** in the sidebar — review latency, how long
+- **Richer per-repository health** in the sidebar: review latency, how long
   things sit waiting on a human.
 
 ## Working on it
@@ -939,7 +937,7 @@ reviewer/
   pipeline.py   one repository's tick: gates, diff, model call, publish
   model.py      the subprocess: one prompt in, one JSON object out
   providers.py  one adapter per coding-agent CLI
-  state.py      SQLite — the only thing that outlives a run
+  state.py      SQLite, the only thing that outlives a run
   gh/           the GitHub clients, REST and GraphQL
   tui/          the dashboard, and the only place Textual is imported
 ```

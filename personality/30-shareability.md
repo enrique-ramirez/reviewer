@@ -11,7 +11,7 @@ knows what shape it needs.
 ## Something already exists
 
 Before a new helper, hook, component, or utility lands, the question is whether
-this codebase already has one. Search for it — by name, by the thing it does, by
+this codebase already has one. Search for it: by name, by the thing it does, by
 the type it returns. Where you find one, name it and say where it is; the author
 usually did not know it was there.
 

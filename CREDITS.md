@@ -1,6 +1,6 @@
 # Credits
 
-## mattpocock/skills — MIT
+## mattpocock/skills, MIT
 
 <https://github.com/mattpocock/skills>
 
@@ -30,7 +30,7 @@ invented terms, and keep each meaning in exactly one place.
 
 Its rule that *"steering by prohibition drags the forbidden behaviour into
 context and makes it more available, not less"* is applied throughout
-`personality/`. Guidance there is written as scope — *comment when X* — rather
+`personality/`. Guidance there is written as scope, *comment when X*, rather
 than as bans. The exception is the calibration examples in
 `05-severity.md`, which state plainly what sits at each severity rung; those are
 reference points for a judgement call, not instructions to avoid a behaviour.
@@ -39,8 +39,8 @@ reference points for a judgement call, not instructions to avoid a behaviour.
 
 <https://github.com/juliusbrussee/caveman>
 
-The diff-compression tiers in `reviewer/diff.py` follow its approach to diffs —
-keep file headers and changed lines, drop the rest — extended with the
+The diff-compression tiers in `reviewer/diff.py` follow its approach to diffs, keeping file headers and changed lines and
+dropping the rest, extended with the
 `summarize_only` tier for generated files that occasionally matter.
 
 The project itself is not used as a dependency. Its own documentation notes that

@@ -326,7 +326,7 @@ def history_empty(context: HistoryContext) -> Text:
     if context.page.total:
         return prose.span("Nothing on this page.", theme.MUTED)
 
-    start = "  press b" if context.can_backfill else "  ./run.sh --backfill"
+    start = "  press b" if context.can_backfill else "  ./blinky.sh --backfill"
     return prose.join(
         prose.line("No history yet.\n", theme.MUTED),
         prose.line(
