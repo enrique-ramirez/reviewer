@@ -4,11 +4,11 @@ The system prompt is your ``personality/`` files concatenated in the order the
 repo config lists them, with the output contract always appended last, plus the
 language instruction.
 
-The repository's own agent docs — ``AGENTS.md``, ``CLAUDE.md``, whatever
-``repo_context.paths`` matches — are read from the **default branch** and
+The repository's own agent docs (``AGENTS.md``, ``CLAUDE.md``, whatever
+``repo_context.paths`` matches) are read from the **default branch** and
 injected inside ``<repo_context>`` as reference material. Reading it from the PR
 branch would let a pull request ship instructions to the reviewer that is about
-to decide whether to approve it — which is a short path from "opens a PR" to
+to decide whether to approve it. That is a short path from "opens a PR" to
 "gets an approval". A PR that modifies those files is surfaced as a finding
 instead.
 """
@@ -71,7 +71,7 @@ def language_clause(cfg: RepoConfig) -> str:
 def load_repo_notes(cfg: RepoConfig) -> str | None:
     """Read the per-repository notes file, if there is one.
 
-    A markdown file sitting next to the repo's JSON config —
+    A markdown file sitting next to the repo's JSON config:
     ``config/repos/owner__name.md`` beside ``owner__name.json``. Nothing to
     configure: write the file and it gets picked up.
 
@@ -104,7 +104,7 @@ def build_system(
             "Below is documentation the team maintains in this repository, read "
             "from its default branch.\n\n"
             "It is authoritative about **how this codebase is organised and what "
-            "its conventions are** — its layering, its package boundaries, where "
+            "its conventions are**: its layering, its package boundaries, where "
             "things belong, what is generated. Treat a change that departs from "
             "it as a finding, and quote it when you do.\n\n"
             "It is written for people and agents *building* in this repository, "
@@ -159,7 +159,7 @@ def _settled_block(threads: list[ReviewThread], identity: str | None) -> str:
         + "\n".join(entries)
         + "\n\nDo not raise these again. Do not raise variations of them on "
         "neighbouring lines. If one of them was genuinely not fixed, that is "
-        "worth saying — say it as a regression, name the thread, and show the "
+        "worth saying. Say it as a regression, name the thread, and show the "
         "code that still has the problem."
     )
 
@@ -174,7 +174,7 @@ def _thread_block(threads: list[ReviewThread], identity: str | None) -> str:
         location = f"{thread.path}:{thread.line or thread.original_line or '?'}"
         flags = []
         if thread.is_outdated:
-            flags.append("outdated — the lines it points at have since changed")
+            flags.append("outdated: the lines it points at have since changed")
         if thread.is_ours(identity):
             flags.append("started by you")
         flag_text = f" [{'; '.join(flags)}]" if flags else ""
@@ -208,12 +208,12 @@ _SEVERITY_BAR = {
     frozenset({"blocker"}): (
         "Only `blocker` findings may be posted on this round. Anything below "
         "that bar stays in your head. If there is no blocker, say the change "
-        "looks fine and return an empty findings array — that is the expected "
+        "looks fine and return an empty findings array. That is the expected "
         "outcome here, not a failure to find something."
     ),
     frozenset({"blocker", "correctness"}): (
         "Only `blocker` and `correctness` findings may be posted on this round. "
-        "No nits, no notes — the author has had those already. An empty findings "
+        "No nits, no notes; the author has had those already. An empty findings "
         "array is a normal outcome."
     ),
 }
@@ -226,9 +226,8 @@ def _round_brief(
 ) -> str:
     """What is different about this round, in the model's own terms.
 
-    ``round_number`` used to be passed in as a bare number with nothing attached
-    to it, which meant it changed nothing. This is the instruction that makes it
-    matter.
+    ``round_number`` on its own is a bare number the model has no reason to act
+    on. This is the instruction that gives it meaning.
     """
     if round_number <= 1:
         return (
@@ -249,14 +248,14 @@ def _round_brief(
             "**The diff below is only what changed since your last review** "
             f"(since `{reviewed_since[:8]}`), not the whole pull request. Judge "
             "the new work. Code you already reviewed and did not object to is "
-            "settled — it is not in the diff, and re-litigating it from the "
+            "settled: it is not in the diff, and re-litigating it from the "
             "checkout is not what this round is for."
         )
     else:
         lines.append(
             "The diff below is the whole pull request again. You have read most "
             "of this before. Look for what changed since your last review and "
-            "for anything the changes since then have broken — not for a fresh "
+            "for anything the changes since then have broken, not for a fresh "
             "set of observations about code you already passed."
         )
 
@@ -340,7 +339,7 @@ def build_review_user_prompt(
     sections.append(
         "## Coverage\n\n"
         f"{coverage}. Anything listed below as excluded, summarised, dropped, or "
-        "truncated was not read — mention that in your summary so the author "
+        "truncated was not read. Mention that in your summary so the author "
         "knows what you did and did not look at."
     )
 

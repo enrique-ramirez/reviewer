@@ -2,13 +2,13 @@
 
 Never runs on its own. Reviewing is the tool's job; reaching back through a
 repository's whole history is a thing the user asks for, once, knowing roughly
-what it will cost — so everything here is driven by an explicit request and
+what it will cost. So everything here is driven by an explicit request and
 reports its size before it starts.
 
 Two deliberate differences from the merge records written during a tick:
 
-* **Everything merged is recorded, not only what we reviewed.** The point of
-  history is to answer "what has this person shipped since March", and filtering
+* **Every merge is recorded, reviewed by us or not.** The point of history is
+  to answer "what has this person shipped since March", and filtering
   it to the handful of pull requests this tool happened to review would answer
   almost nothing.
 * **No model calls.** A description costs a model call each, and a repository
@@ -55,7 +55,7 @@ def parse_range(name: str) -> int | None:
     """Days back for a named range. None means everything."""
     if name not in RANGE_DAYS:
         raise ValueError(
-            f"unknown range {name!r} — pick one of: {', '.join(RANGE_DAYS)}"
+            f"unknown range {name!r}. Pick one of: {', '.join(RANGE_DAYS)}"
         )
     return RANGE_DAYS[name]
 
@@ -109,7 +109,7 @@ class Plan:
     def describe(self) -> str:
         span = RANGE_LABELS.get(self.range_key, self.range_key).lower()
         if self.count is None:
-            return f"{self.repo}: {span} — size unknown until it runs"
+            return f"{self.repo}: {span}, size unknown until it runs"
         return (
             f"{self.repo}: {self.count:,} merged pull request(s) over {span}, "
             f"about {self.requests} request(s), no model calls"
@@ -121,7 +121,7 @@ class Result:
     scanned: int = 0
     filed: int = 0
     skipped: int = 0
-    """Already on record — a previous backfill, or a merge we saw ourselves."""
+    """Already on record: a previous backfill, or a merge we saw ourselves."""
     pages: int = 0
     stopped_early: bool = False
     errors: list[str] = field(default_factory=list)
@@ -158,7 +158,7 @@ def run(
     """Walk the merged pull requests and file them.
 
     Committed a page at a time rather than at the end, so a sweep that is
-    interrupted — the window closed, the process killed — keeps everything it
+    interrupted (the window closed, the process killed) keeps everything it
     had already fetched instead of throwing the lot away.
     """
     result = Result()
@@ -206,7 +206,7 @@ def run(
                 continue
 
             # Where we did review it, its stats come along. Most backfilled rows
-            # have none, and read as merges we simply were not part of.
+            # have none, and read as merges we were not part of.
             tally = store.review_tally(plan.repo, number)
             author = row.get("author") or "ghost"
             filed = store.record_merged(
@@ -277,7 +277,7 @@ def _outcome(filed: int, scanned: int) -> str:
     if filed:
         return f"{filed:,} added to the history"
     if scanned:
-        return f"already up to date — {scanned:,} checked, nothing missing"
+        return f"already up to date: {scanned:,} checked, nothing missing"
     return "nothing found to add"
 
 
@@ -285,7 +285,7 @@ class Runner:
     """Drives a backfill from the interface, off the event loop.
 
     Textual's loop must never block, and every step here talks to GitHub, so the
-    work happens on its own thread with its own database connection — SQLite
+    work happens on its own thread with its own database connection. SQLite
     connections belong to the thread that opened them, and the reviewer's is
     busy elsewhere. The interface polls ``status()`` on the timer it already
     runs and never touches anything this writes directly.
@@ -429,7 +429,7 @@ class Runner:
             stopped = " (stopped)" if self._stop.is_set() else ""
             self._set(phase="done", message=_outcome(filed, scanned) + stopped)
             log.get().info(
-                "backfill finished — %d added, %d already on record",
+                "backfill finished: %d added, %d already on record",
                 filed,
                 scanned - filed,
             )

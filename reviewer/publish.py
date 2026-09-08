@@ -2,7 +2,7 @@
 
 Nothing the model produced reaches GitHub without passing through here first.
 The important part is line validation: GitHub rejects a review comment whose line
-is not part of the diff, and it rejects the *entire review* along with it — one
+is not part of the diff, and it rejects the *entire review* along with it. One
 bad line number and a good review is lost. So every proposed comment is checked
 against the real patch, and anything that does not fit is demoted into the
 summary rather than dropped or guessed at.
@@ -102,7 +102,7 @@ def severities_allowed(cfg: RepoConfig, round_number: int) -> set[str]:
     The bar rises as a pull request goes round again. Round one is a full
     review. After that the author has already been told the small stuff, and
     repeating the exercise on a re-read of the same code finds new small stuff
-    forever — so nits and notes stop, and eventually everything below a blocker
+    forever. So nits and notes stop, and eventually everything below a blocker
     stops too.
 
     This is a filter on what gets posted, not on what the model looked for. The
@@ -127,7 +127,7 @@ def filter_by_round(
 ) -> tuple[list[Finding], list[Finding]]:
     """Split findings into what this round may post and what it must hold back.
 
-    Returns ``(kept, dropped)``. Dropped findings are not posted anywhere — the
+    Returns ``(kept, dropped)``. Dropped findings are not posted anywhere: the
     point is silence, so listing them in the summary would defeat it.
     """
     if round_number <= 1:
@@ -168,11 +168,11 @@ def submit_review(
     body: str,
     comments: list[dict[str, Any]],
 ) -> bool:
-    """Submit a review, degrading gracefully rather than losing it.
+    """Submit a review, falling back rather than losing it.
 
-    If GitHub still rejects the comment set — its position rules have edge cases
-    around renames and mode changes that a patch parser cannot fully predict —
-    the review is resubmitted with the findings folded into the body. A review
+    If GitHub still rejects the comment set, the review is resubmitted with the
+    findings folded into the body. Its position rules have edge cases around
+    renames and mode changes that a patch parser cannot fully predict. A review
     that reads slightly worse beats a review that never posted.
     """
     try:

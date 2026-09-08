@@ -11,8 +11,8 @@ request for as long as the database lives. Where the reviewer already wrote a
 summary of the change, that is the main input and no diff is fetched at all.
 
 Anything merged while the tool was watching gets one of these on the tick that
-noticed it. Backfilled history does not — a sweep of two thousand merges would
-be two thousand model calls, and that is what keeps a backfill free. ``Runner``
+noticed it. Backfilled history does not: a sweep of two thousand merges would
+be two thousand model calls, and not making them is what keeps a backfill free. ``Runner``
 at the bottom of this file is the other way in: one merge, because someone
 looked at the row and asked for it.
 """
@@ -39,7 +39,7 @@ tense, starting with the kind of change: a feature, a bug fix, a refactor, a \
 dependency bump, a revert, documentation, tests, configuration, and so on.
 
 Be concrete and specific to this change. "Improved the codebase" and \
-"various changes" are useless. Name the thing that changed — the endpoint, the \
+"various changes" are useless. Name the thing that changed: the endpoint, the \
 component, the bug's symptom.
 
 Do not restate the title. Assume the reader can already see the title, the \
@@ -165,7 +165,7 @@ class Runner:
     summarising a whole repository's past would cost a model call per merge. This
     is how one of those rows gets a real summary: the interface asks for a
     specific pull request, and what comes back is stored exactly as a summary
-    written during a tick would be — same column, same ``model`` source, kept for
+    written during a tick would be: same column, same ``model`` source, kept for
     good. Nothing here re-reads it later.
 
     Requests queue and are served one at a time. Pressing the key on six rows

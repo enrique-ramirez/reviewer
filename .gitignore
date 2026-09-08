@@ -32,3 +32,5 @@ venv/
 .claude/settings.local.json
 *.local.txt
 .claude/settings.json.bak
+*.local.bak
+.claude/.review-kit.manifest

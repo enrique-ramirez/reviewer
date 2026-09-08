@@ -3,7 +3,7 @@
 Needed for three things REST cannot do:
 
 * read review threads with ``isResolved`` / ``isOutdated``
-* resolve a conversation (``resolveReviewThread`` — no REST equivalent exists)
+* resolve a conversation (``resolveReviewThread``, which has no REST equivalent)
 * read the check rollup for a commit in one round trip
 
 One deliberate choice about the check rollup: it contains check runs and commit
@@ -108,8 +108,8 @@ query PR($owner: String!, $name: String!, $number: Int!) {
 """
 
 # Backfill. Ordered by UPDATED_AT rather than MERGED_AT, which GitHub does not
-# offer as a sort key — but a merged pull request is always updated at or after
-# it was merged, so "updated before the cutoff" is a safe place to stop. It over-
+# offer as a sort key. A merged pull request is always updated at or after it
+# was merged, so "updated before the cutoff" is a safe place to stop. It over-
 # fetches slightly (something merged long ago and touched since) and the caller
 # filters those out; it never misses one that belongs in the range.
 #
@@ -239,7 +239,7 @@ class PRSnapshot:
     it."""
     mergeable: str = "UNKNOWN"
     """MERGEABLE | CONFLICTING | UNKNOWN. UNKNOWN means GitHub has not finished
-    computing it yet, which is common right after a push — it is not a synonym
+    computing it yet, which is common right after a push. It is not a synonym
     for CONFLICTING and should never be shown as one."""
     url: str = ""
 
@@ -447,7 +447,7 @@ class GraphQLClient:
         """How many merged pull requests a backfill would cover.
 
         ``since_date`` is ``YYYY-MM-DD`` or None for everything. Returns None if
-        the count could not be had — a backfill can still run without it, it
+        the count could not be had. A backfill can still run without it; it
         just cannot say up front how big it will be.
         """
         query = f"repo:{owner}/{name} is:pr is:merged"

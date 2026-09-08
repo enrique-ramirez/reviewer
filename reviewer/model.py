@@ -2,12 +2,12 @@
 
 The model is invoked as a pure function: text in, JSON out. It gets read-only
 access to a clean checkout of the PR head so it can look at surrounding code,
-and nothing else — no shell it can write with, no network, and no GitHub token
+and nothing else: no shell it can write with, no network, and no GitHub token
 anywhere in its environment.
 
 Its working directory is a neutral empty scratch dir rather than the checkout.
 That matters: every one of these CLIs auto-loads instructions from the directory
-it starts in — ``CLAUDE.md``, ``AGENTS.md``, ``GEMINI.md`` — so running one
+it starts in (``CLAUDE.md``, ``AGENTS.md``, ``GEMINI.md``), so running one
 inside the PR's tree would let a pull request feed instructions to its own
 reviewer. Repo context is read from the default branch and injected as delimited
 data instead (see ``prompt.py``).
@@ -48,7 +48,7 @@ class ModelError(RuntimeError):
 #
 # Without this they outlive the tool: the reviewer runs on a daemon thread, and
 # a daemon thread being abandoned at interpreter exit does nothing to a child
-# process it started — that child is reparented and runs to completion, paying
+# process it started. That child is reparented and runs to completion, paying
 # for a review whose result nobody is left to post.
 #
 # Labelled ``repo#number`` so the dashboard can stop one of them by name. A
@@ -77,8 +77,8 @@ def stop_process(proc: subprocess.Popen, grace: float = 5.0) -> None:
     """End one model call, and anything it started.
 
     Signals the process group rather than the process: these CLIs run children
-    of their own, and terminating only the parent would leave those behind —
-    exactly the problem this exists to solve.
+    of their own, and terminating only the parent would leave those behind,
+    which is exactly the problem this exists to solve.
     """
     if proc.poll() is not None:
         return
@@ -114,8 +114,8 @@ def terminate_all(grace: float = 5.0) -> int:
     """Stop every model call in flight. Returns how many there were.
 
     Called when the tool is quitting. Anything killed here was going to be
-    thrown away regardless — the code that would have posted its review is on
-    its way out — so the only thing letting it finish would buy is the bill.
+    thrown away regardless, because the code that would have posted its review
+    is on its way out. The only thing letting it finish would buy is the bill.
     """
     _cancelled.set()
     with _live_lock:
@@ -158,8 +158,8 @@ def was_cancelled(label: str) -> bool:
 def live_count() -> int:
     """Model calls running right now, across every thread.
 
-    Covers reviews, thread replies and merge summaries alike — anything that
-    reached a CLI — so a quit confirmation can say what it is about to end
+    Covers anything that reached a CLI: reviews, thread replies and merge
+    summaries alike. A quit confirmation can then say what it is about to end
     without each caller having to register itself separately.
     """
     with _live_lock:
@@ -216,7 +216,7 @@ def _pump(
     """Feed the child its prompt and collect its output, reporting as it goes.
 
     Three threads rather than ``communicate()``. One writes, because a review
-    bundle is tens of kilobytes — larger than a pipe buffer — and writing it
+    bundle is tens of kilobytes (larger than a pipe buffer) and writing it
     inline would deadlock against a child that has not started reading yet. One
     each for stdout and stderr, so that *a line arriving* is an event this can
     see rather than something discovered at EOF.
@@ -306,7 +306,7 @@ def _pump(
                 f"{deadline.slept():.0f}s of it asleep)"
             )
 
-    # The process is gone; its pipes are at EOF, so these finish promptly. The
+    # The process is gone; its pipes are at EOF, so these finish at once. The
     # timeout is a backstop against a grandchild holding the write end open.
     for worker in workers:
         worker.join(timeout=10)
@@ -381,8 +381,8 @@ def _child_env() -> dict[str, str]:
 def extract_json(text: str) -> dict[str, Any]:
     """Pull a JSON object out of the model's reply.
 
-    Handles a bare object, a fenced block, and an object with prose either side —
-    all three show up in practice, and a review is too expensive to throw away
+    Handles a bare object, a fenced block, and an object with prose either side.
+    All three show up in practice, and a review is too expensive to throw away
     over a stray "Here you go:".
     """
     text = (text or "").strip()
@@ -421,9 +421,9 @@ def run(
 ) -> ModelResult:
     """One model call. Returns the parsed JSON payload plus usage figures.
 
-    ``cfg`` is a resolved provider block — see ``config.resolve_provider``.
+    ``cfg`` is a resolved provider block; see ``config.resolve_provider``.
 
-    ``label`` names the call — ``owner/repo#123`` — so the dashboard can stop
+    ``label`` names the call (``owner/repo#123``) so the dashboard can stop
     this one without stopping the rest. ``on_progress`` is handed a ``Progress``
     every few seconds while the call runs; it must not raise, and is wrapped so
     that it cannot take a review down with it if it does.
@@ -451,11 +451,11 @@ def run(
 
         try:
             # Popen rather than run(), so the handle can be registered and the
-            # call stopped when the tool is asked to quit. Its own session, so
-            # terminating it takes the whole tree with it — these CLIs spawn
-            # children of their own — and so that a Ctrl-C in the terminal is
-            # something this code decides about rather than something the shell
-            # delivers behind its back.
+            # call stopped when the tool is asked to quit. Its own session for
+            # two reasons: terminating it takes the whole tree with it, since
+            # these CLIs spawn children of their own, and a Ctrl-C in the
+            # terminal becomes something this code decides about rather than
+            # something the shell delivers behind its back.
             proc = subprocess.Popen(
                 call.command,
                 stdin=subprocess.PIPE,
@@ -489,7 +489,7 @@ def run(
         # Drained here rather than inside the failure branch below, and whatever
         # the outcome. A call cancelled a moment before it would have exited on
         # its own reaches this line with a zero status, and a mark left behind
-        # by that would be read by the *next* call on the same pull request —
+        # by that would be read by the *next* call on the same pull request,
         # reporting some unrelated failure as something the user asked for.
         cancelled_by_hand = bool(label) and was_cancelled(label)
 
@@ -497,9 +497,9 @@ def run(
             if _cancelled.is_set():
                 # Not a failure. We stopped it on the way out, and saying
                 # "codex exited -15" would read as a crash.
-                raise ModelError("model call stopped — shutting down")
+                raise ModelError("model call stopped: shutting down")
             if cancelled_by_hand:
-                raise ModelError("model call stopped — cancelled")
+                raise ModelError("model call stopped: cancelled")
             detail = (stderr or stdout or "").strip()[:600]
             raise ModelError(f"{adapter.name} exited {proc.returncode}: {detail}")
 

@@ -174,7 +174,7 @@ class Reviewer:
             unresolved = self._record_merges(numbers)
             self.store.forget_closed(self.cfg.repo, numbers + unresolved)
 
-        # Phase 1 — a fast scan that populates the board before any model call.
+        # Phase 1: a fast scan that populates the board before any model call.
         # Costs one GraphQL request per pull request and no model time, so the
         # interface has a complete picture within seconds of starting rather
         # than after a full review cycle. The snapshots are reused below, so
@@ -204,7 +204,7 @@ class Reviewer:
 
         self.status_cb(f"scanned {len(snapshots)} — starting reviews")
 
-        # Phase 2 — the slow half.
+        # Phase 2: the slow half.
         for pull in pulls:
             if result.reviewed >= budget:
                 log.get().info(
@@ -254,7 +254,7 @@ class Reviewer:
         """File pull requests that left the open list having been merged.
 
         Ones we reviewed, and ones we wrote. Approval is not the bar on either
-        count — a pull request we commented on or requested changes on is one we
+        count. A pull request we commented on or requested changes on is one we
         have an opinion about, and where it ended up is worth knowing.
 
         Our own are here because the reviewer never reviews them: ``skip_own_prs``
@@ -452,9 +452,9 @@ class Reviewer:
         ``statusCheckRollup``. Two REST endpoints can stand in, tried in order of
         how much they cover:
 
-        * ``/check-runs`` — the same data as the rollup. Also needs Checks, so it
+        * ``/check-runs``: the same data as the rollup. Also needs Checks, so it
           usually fails alongside it, but costs one request to find out.
-        * ``/status`` — legacy commit statuses. Covers integrations that post
+        * ``/status``: legacy commit statuses. Covers integrations that post
           statuses; does *not* cover GitHub Actions check runs.
 
         A source that returns zero entries is treated as telling us nothing, not
@@ -528,8 +528,8 @@ class Reviewer:
                 snapshot.checks.accessible = True
                 log.get().warning(
                     "%s#%s: CI read from commit statuses only (%d). GitHub Actions "
-                    "check runs are not visible to this token — anything running "
-                    "in Actions is unchecked.",
+                    "check runs are not visible to this token, so anything "
+                    "running in Actions is unchecked.",
                     self.cfg.repo,
                     snapshot.number,
                     len(statuses),
@@ -538,8 +538,8 @@ class Reviewer:
     def record_board(self, snapshot: PRSnapshot, action: str | None = None) -> None:
         """Write one pull request's row for the interface.
 
-        Called before gating so that skipped pull requests — including your own,
-        which the reviewer never reviews — still appear on the board. Without
+        Called before gating so that skipped pull requests still appear on the
+        board, including your own, which the reviewer never reviews. Without
         this the interface could not answer "is my PR ready to merge", because
         the reviewer deliberately ignores those.
         """
@@ -648,9 +648,9 @@ class Reviewer:
 
         # From here on this pull request is live work, which can be minutes of
         # it. Marked so the board says so instead of showing the previous pass's
-        # outcome the whole time. Cleared in `finally` — an exception here is
-        # caught a level up, and without this the row would claim to still be
-        # under review until the process restarted.
+        # outcome the whole time. Cleared in `finally`, because an exception
+        # here is caught a level up and without this the row would claim to
+        # still be under review until the process restarted.
         self.store.begin_active(
             cfg.repo, number, "replying" if comments_only else "reviewing"
         )
@@ -883,7 +883,7 @@ class Reviewer:
         time somebody pushes.
 
         Returns ``(files, reviewed_since)``. ``reviewed_since`` is the SHA the
-        diff is measured from, or ``None`` when this is a full read — the prompt
+        diff is measured from, or ``None`` when this is a full read. The prompt
         uses it to tell the model which of the two it is looking at. ``files`` of
         ``None`` means the push contained nothing that belongs to this pull
         request, so there is nothing to review.
@@ -1044,7 +1044,7 @@ class Reviewer:
             # reprinting the content we just decided was not worth the round.
             summary_text += (
                 f"\n\n_{len(held_back)} smaller point"
-                f"{'s' if len(held_back) > 1 else ''} held back — this is round "
+                f"{'s' if len(held_back) > 1 else ''} held back. This is round "
                 f"{pr_state_round}, and they are below the bar for a repeat "
                 "review. Ask if you want them._"
             )
@@ -1126,7 +1126,7 @@ class Reviewer:
 
         ``summary_text`` is the model's own account of the change. It is written
         here because it is already in hand and would otherwise be rendered into
-        the posted body and dropped — which makes it the cheapest possible input
+        the posted body and dropped. That makes it the cheapest possible input
         to the merge summary, and often the best one.
         """
         self.store.record_review_event(
@@ -1179,7 +1179,7 @@ class Reviewer:
         if not cfg.gates.get("require_ci_green", True):
             # An approval on a red build with no mention of it misleads the team.
             # Say plainly that CI was not looked at.
-            note = "CI status not verified — this review did not check whether the build passes"
+            note = "CI status not verified: this review did not check whether the build passes"
             coverage = f"{coverage}. {note}" if coverage else note
 
         if event == publish.EVENT_APPROVE and not findings:

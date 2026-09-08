@@ -1,6 +1,6 @@
 """One adapter per coding-agent CLI.
 
-Every provider here is a *terminal agent* — a command you have already installed
+Every provider here is a *terminal agent*: a command you have already installed
 and signed in, which reads a prompt, is allowed to read files, and prints an
 answer. That is the shape the reviewer wants, and it is why there is no HTTP
 client anywhere in this file: a review runs against your existing subscription,
@@ -14,8 +14,8 @@ An adapter is two small jobs:
 ``read``
     Turn whatever the CLI printed back into ``(text, usage)``.
 
-Everything else — starting the process, killing it on quit, pulling the JSON
-object out of the reply — is the same for all of them and lives in ``model.py``.
+Starting the process, killing it on quit, pulling the JSON object out of the
+reply: all of that is the same for every provider and lives in ``model.py``.
 
 Two rules every adapter follows, because the security properties in the README
 depend on them rather than on any one vendor's flags:
@@ -24,7 +24,7 @@ depend on them rather than on any one vendor's flags:
 run into ``ARG_MAX`` as an argument long before it ran into anything else.
 
 *The working directory is a scratch dir, never the checkout.* All of these CLIs
-auto-load instructions from the directory they start in — ``CLAUDE.md``,
+auto-load instructions from the directory they start in: ``CLAUDE.md``,
 ``AGENTS.md``, ``GEMINI.md``. Starting one inside the tree it is reviewing would
 let a pull request write instructions to its own reviewer. The checkout is named
 in the prompt and reached by absolute path instead.
@@ -35,7 +35,7 @@ differs.
 
 CLI flags drift between releases faster than this file can. Anything version
 specific belongs in a provider's ``extra_args``, which is appended verbatim to
-every invocation — that is the escape hatch, and reaching for it is expected.
+every invocation. That is the escape hatch, and reaching for it is expected.
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ class Adapter:
         pretending otherwise would be worse than an honest spinner. Providers
         that stream override this.
 
-        Must be cheap — it runs on the read thread, once per line — and must not
+        Must be cheap (it runs on the read thread, once per line) and must not
         raise. ``model`` guards it anyway, on the principle that no progress
         note is worth losing a review over.
         """
@@ -179,8 +179,8 @@ class Adapter:
     def tools(self, cfg: dict[str, Any]) -> list[str]:
         """The tools this call may use.
 
-        An explicit empty list means "none" — what a merge summary wants, since
-        it has nothing to look at. Only an absent or null setting falls back to
+        An explicit empty list means "none", which is what a merge summary
+        wants, since it has nothing to look at. Only an absent or null setting falls back to
         the read-only default.
         """
         allowed = cfg.get("allowed_tools")
@@ -298,9 +298,9 @@ class ClaudeAdapter(Adapter):
     Run with ``--output-format stream-json``, which prints one JSON event per
     line as the review happens rather than one object at the end. Two things
     come of that. The dashboard can say what the model is doing right now
-    instead of spinning at it, and — the reason it is worth the extra parsing —
-    a call that has printed nothing for ten minutes becomes distinguishable from
-    one that is simply taking ten minutes. Total elapsed time cannot tell those
+    instead of spinning at it. And a call that has printed nothing for ten
+    minutes becomes distinguishable from one that is merely slow, which is what
+    makes the extra parsing worth it. Total elapsed time cannot tell those
     apart; silence can.
     """
 
@@ -324,8 +324,8 @@ class ClaudeAdapter(Adapter):
             "-p",
             "--output-format",
             "stream-json",
-            # Required alongside stream-json under --print, and the reason this
-            # is not simply the old flag with a new value.
+            # Required alongside stream-json under --print. That extra flag is
+            # what makes stream-json more than the old value under a new name.
             "--verbose",
             "--append-system-prompt",
             system_prompt,
@@ -383,16 +383,16 @@ class ClaudeAdapter(Adapter):
 
     def read(self, call: Call, stdout: str) -> Reply:
         # stream-json ends with a "result" event carrying the answer and the
-        # token counts. ``--output-format json`` — an older CLI, or anyone who
-        # has put it back in extra_args — prints that same object on its own,
+        # token counts. ``--output-format json`` (an older CLI, or anyone who
+        # has put it back in extra_args) prints that same object on its own,
         # and older versions still print bare text. All three land here, because
         # these flags drift between releases faster than this file can.
         result = _final_result(stdout)
 
         if result is None:
             # No closing event: the call was cut short, or this is not a stream
-            # at all but a pretty-printed object. Only here — the path that has
-            # already failed — is it worth reading the whole thing to salvage
+            # at all but a pretty-printed object. Only here, on the path that
+            # has already failed, is it worth reading the whole thing to salvage
             # the last thing the model actually said.
             fallback = _last_assistant_text(stdout)
             try:
@@ -434,7 +434,7 @@ class CodexAdapter(Adapter):
     just the checkout. So a review here can see more of your machine than the
     same review under Claude Code, where the tool allowlist is the boundary. The
     sandbox still cannot write, install, or reach the network, and the GitHub
-    token is stripped from its environment like everywhere else — but if the
+    token is stripped from its environment like everywhere else. But if the
     scoping in the README is why you run this tool, that is the line that moves.
     """
 
@@ -538,14 +538,14 @@ class GeminiAdapter(Adapter):
     """Google's Gemini CLI.
 
     Tool names differ from Claude Code's, so the configured allowlist is
-    translated rather than passed through — a config that says ``Read`` means
+    translated rather than passed through: a config that says ``Read`` means
     the same thing whichever provider ends up serving it. Names this does not
     recognise are passed along untouched, so a Gemini-specific allowlist still
     works if you would rather write one.
 
-    ``--include-directories`` grants write access as well as read. Nothing here
+    ``--include-directories`` grants write access on top of read. Nothing here
     turns on ``--approval-mode yolo``, so a write still needs a confirmation
-    that a non-interactive run cannot give and therefore fails — but that is one
+    that a non-interactive run cannot give and therefore fails. But that is one
     flag in ``extra_args`` away from not being true, which is a good reason not
     to put it there.
     """
@@ -627,7 +627,7 @@ class CommandAdapter(Adapter):
     whole command line past the executable comes from ``extra_args``, and the
     answer is read straight from stdout with no envelope to unwrap.
 
-    Nothing here can restrict what that command is allowed to do — this is a
+    Nothing here can restrict what that command is allowed to do: this is a
     ``type`` that trusts the command you named. Point it at something read-only.
     """
 

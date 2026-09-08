@@ -2,14 +2,14 @@
 
 Automating the reviewing makes it easy to stop reading the reviews. The board
 can say *2 findings* and the History pane can say *4 comments over 2 rounds*,
-and neither tells you what was actually said — for that you had to open a
+and neither tells you what was actually said. For that you had to open a
 browser, which is the habit this tool exists to remove.
 
 Fetched on demand rather than stored. Three reasons, and the third is the one
 that settles it:
 
-* Everything already on record — every pull request this tool reviewed before
-  today, and all of backfilled history — would show nothing under a scheme that
+* Everything already on record (every pull request this tool reviewed before
+  today, and all of backfilled history) would show nothing under a scheme that
   only kept what it wrote from now on.
 * GitHub is the truth. A stored copy is a snapshot of what we posted, and says
   nothing about the reply that came after it.
@@ -36,7 +36,7 @@ from .state import Store
 MAX_BODY_CHARS = 4000
 
 #: How many other people's submitted reviews to render in full. Ours are never
-#: dropped — they are what this screen exists for. A busy repository with three
+#: dropped, because they are what this screen exists for. A busy repository with three
 #: review bots can carry thirty of them, and a reader scrolling for ours through
 #: all of that is back to using the browser.
 MAX_OTHER_REVIEWS = 8
@@ -44,7 +44,7 @@ MAX_OTHER_REVIEWS = 8
 
 @dataclass(frozen=True)
 class Review:
-    """One submitted review — the summary someone left, not an inline note."""
+    """One submitted review: the summary someone left, not an inline note."""
 
     author: str
     state: str
@@ -148,7 +148,7 @@ def render(conversation: Conversation) -> str:
             if review.body.strip():
                 out.append(f"{_clip(review.body)}\n")
             else:
-                out.append("*No summary — inline comments only.*\n")
+                out.append("*No summary, inline comments only.*\n")
 
     return "\n".join(out)
 
@@ -171,8 +171,8 @@ class Runner:
     """Fetches one pull request's conversation, off the interface's thread.
 
     Results are kept for the life of the run, so flicking back to a pull request
-    you already looked at is instant. ``refresh`` is what asks GitHub again —
-    the point of fetching rather than storing is that the answer changes.
+    you already looked at is instant. ``refresh`` is what asks GitHub again.
+    The point of fetching rather than storing is that the answer changes.
     """
 
     def __init__(

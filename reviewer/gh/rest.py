@@ -30,8 +30,8 @@ API_VERSION = "2022-11-28"
 def _run_is_newer(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
     """Whether ``candidate`` is a later attempt than ``current``.
 
-    Prefers ``run_attempt``, then ``run_number``, then the creation timestamp —
-    ISO 8601 in UTC, so a string comparison orders correctly.
+    Prefers ``run_attempt``, then ``run_number``, then the creation timestamp,
+    which is ISO 8601 in UTC, so a string comparison orders correctly.
     """
     for key in ("run_attempt", "run_number"):
         a, b = candidate.get(key), current.get(key)
@@ -260,7 +260,7 @@ class RestClient:
         ``head`` against the merge base, so a base branch that has moved on does
         not show up as changes the author made.
 
-        ``None`` means "no usable answer" — a force-push that orphaned the old
+        ``None`` means "no usable answer": a force-push that orphaned the old
         SHA, a repository we cannot reach, anything at all. Every caller treats
         that as "review the whole pull request", which is the safe direction to
         fail in.
@@ -271,7 +271,7 @@ class RestClient:
             )
         except GitHubError as exc:
             log.get().info(
-                "cannot compare %s...%s in %s/%s (%s) — falling back to the full diff",
+                "cannot compare %s...%s in %s/%s (%s), falling back to the full diff",
                 base[:8],
                 head[:8],
                 owner,
@@ -283,8 +283,8 @@ class RestClient:
             return None
         files = payload.get("files")
         if not isinstance(files, list):
-            # A compare with no file list is not an empty compare — it is an
-            # answer we cannot read. Fall back rather than review nothing.
+            # A compare with no file list is an answer we cannot read, not an
+            # empty compare. Fall back rather than review nothing.
             return None
         return [f for f in files if isinstance(f, dict)]
 
@@ -322,8 +322,8 @@ class RestClient:
         """Legacy combined commit status for a ref.
 
         Fallback for tokens that cannot read the GraphQL check rollup. It covers
-        only *commit statuses* — the older mechanism used by services like
-        Vercel, CircleCI, and Codecov — and not GitHub Actions check runs, so an
+        only *commit statuses* (the older mechanism used by services like
+        Vercel, CircleCI, and Codecov) and not GitHub Actions check runs, so an
         empty result means "nothing here to see", never "everything passed".
         """
         try:
