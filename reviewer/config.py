@@ -15,7 +15,7 @@ Which model does the reviewing is settled here, in two halves. ``providers`` in
 the global config is a named list of CLIs you have installed; ``provider`` picks
 which of them is the default. A repository that wants something else says so in
 its own ``model`` block, and anything it sets there is layered over the named
-provider — so "everything on the usual one, except this noisy repo on something
+provider. So "everything on the usual one, except this noisy repo on something
 cheaper" is two lines, not a second config file.
 """
 
@@ -34,7 +34,7 @@ DEFAULT_API_URL = "https://api.github.com"
 DEFAULT_GRAPHQL_URL = "https://api.github.com/graphql"
 
 #: The conventions files a team is likely to keep, whichever agent they wrote
-#: them for. Nothing to do with which provider reviews — this is the *reviewed*
+#: them for. Nothing to do with which provider reviews: this is the *reviewed*
 #: repository's own documentation.
 DEFAULT_CONTEXT_PATHS = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".claude/*.md"]
 
@@ -47,7 +47,7 @@ GLOBAL_DEFAULTS: dict[str, Any] = {
     # come apart badly: six reviews against a 900-second provider timeout is
     # ninety minutes of worst case against a fifteen-minute tick. Reviews run
     # one at a time, so a repository at the end of the list waits for all of
-    # that. Nothing in flight is interrupted — this only declines to start the
+    # that. Nothing in flight is interrupted; this only declines to start the
     # next one. Null means no limit.
     "max_tick_seconds": 1800,
     "provider": "claude",
@@ -146,12 +146,11 @@ REPO_DEFAULTS: dict[str, Any] = {
             "max_chars": 20000,
         },
         "max_disagreement_rounds_per_thread": 3,
-        # What a *repeat* review of the same pull request is allowed to do. The
-        # defaults exist because the first version of this tool had none: every
-        # push triggered a fresh full review with no memory of the last one, and
-        # a pull request that took nine rounds to land collected nine rounds'
-        # worth of new nits. Three findings a round is a good review; nine
-        # rounds of three is a wall.
+        # What a *repeat* review of the same pull request is allowed to do.
+        # Without these, every push buys a fresh full review with no memory of
+        # the last one, and a pull request that takes nine rounds to land
+        # collects nine rounds' worth of new nits. Three findings a round is a
+        # good review; nine rounds of three is a wall.
         "rounds": {
             "incremental_after_first": True,
             "nits_until_round": 1,
@@ -192,7 +191,7 @@ def _strip_comments(value: Any) -> Any:
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Merge ``override`` onto a copy of ``base``.
 
-    Dicts merge key by key. Lists replace wholesale — a repo that sets
+    Dicts merge key by key. Lists replace wholesale: a repo that sets
     ``exclude`` means *that* list, not the defaults plus that list.
     """
     result = copy.deepcopy(base)
@@ -215,7 +214,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 ENV_SOURCES: dict[str, str] = {}
-"""Where each loaded variable came from — ``.env`` or ``environment``."""
+"""Where each loaded variable came from: ``.env`` or ``environment``."""
 
 
 def load_env(config_dir: Path, repo_root: Path) -> dict[str, str]:
@@ -256,7 +255,7 @@ def load_env(config_dir: Path, repo_root: Path) -> dict[str, str]:
                 ENV_SOURCES.setdefault(key, "environment (shadowing .env)")
                 log.get().warning(
                     "%s is exported in your shell and differs from the value in "
-                    "%s — the exported one is being used. If you rotated the "
+                    "%s. The exported one is being used. If you rotated the "
                     "token, run `unset %s` or open a new terminal.",
                     key,
                     candidate,
@@ -276,7 +275,7 @@ def _check_providers(entries: Any, default: str, path: Path) -> dict[str, dict[s
     loop, on the one pull request that needed the call.
 
     An entry named after a known type does not have to repeat it, so the common
-    case stays two lines. A named profile — "cheap", "work" — has to say what it
+    case stays two lines. A named profile ("cheap", "work") has to say what it
     is, because there is nothing to guess from.
     """
     if not isinstance(entries, dict) or not entries:
@@ -301,7 +300,7 @@ def _check_providers(entries: Any, default: str, path: Path) -> dict[str, dict[s
         if kind == providers.CommandAdapter.name and not entry.get("command"):
             raise ConfigError(
                 f'{path}: providers.{name} is type "command", so it needs a '
-                '"command" to run — there is no default for it.'
+                '"command" to run; there is no default for it.'
             )
         entry["type"] = kind
         checked[str(name)] = entry
@@ -409,9 +408,9 @@ class GlobalConfig:
     ) -> dict[str, Any]:
         """A provider for one kind of call, cheaper than a full review.
 
-        Starts from whatever reviews that repo — so a repo that moved provider
-        moves its lesser calls with it — then layers the purpose's own block on
-        top.
+        Starts from whatever reviews that repo, then layers the purpose's own
+        block on top. A repo that moved provider moves its lesser calls with
+        it.
         """
         overrides = dict(repo.model) if repo else {}
 
@@ -450,8 +449,8 @@ class GlobalConfig:
         Worth separating from the review it came from, because it is a much
         smaller job: no diff is sent at all, just the conversation, and the
         question is whether a reply holds up rather than what is wrong with the
-        change. Tools are kept — checking a claim against the code is most of
-        the point — so this is not the tool-less job a merge summary is.
+        change. Tools are kept, because checking a claim against the code is
+        most of the point. This is not the tool-less job a merge summary is.
         """
         return self._for_purpose(self.thread_reply, repo)
 

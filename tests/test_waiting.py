@@ -1,8 +1,8 @@
 """The wait between passes: counting down, holding, and cutting it short.
 
 Driven with a fake clock rather than real time, so a fifteen-minute tick is a
-few loop iterations. ``sleep`` is what advances it — the same call the real loop
-blocks in — which keeps the shape of the test the same as the shape of the code.
+few loop iterations. ``sleep`` is what advances it: the same call the real loop
+blocks in. That keeps the shape of the test the same as the shape of the code.
 """
 
 from __future__ import annotations
@@ -93,9 +93,9 @@ class CountingDown(unittest.TestCase):
         )
 
         # Ten steps apart, so exactly ten steps' worth of countdown apart. The
-        # absolute values are one step behind the sleep count — the first pass
-        # through the loop has had no time to spend yet — which is why this
-        # asserts the interval rather than the reading.
+        # absolute values are one step behind the sleep count, because the
+        # first pass through the loop has had no time to spend yet. That is why
+        # this asserts the interval rather than the reading.
         self.assertEqual(len(seen), 2)
         self.assertAlmostEqual(seen[0] - seen[1], 10 * STEP)
         self.assertLess(seen[0], TICK)
@@ -168,7 +168,7 @@ class Pausing(unittest.TestCase):
         )
 
         self.assertEqual(h.status["remaining"], 0.0)
-        # Ten steps counted, fifty held, then the rest — so the wait took fifty
+        # Ten steps counted, fifty held, then the rest. So the wait took fifty
         # steps longer than it otherwise would.
         self.assertEqual(h.clock.sleeps, int(TICK / STEP) + 50)
 

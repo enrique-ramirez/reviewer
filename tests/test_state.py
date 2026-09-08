@@ -59,12 +59,12 @@ class ReviewedPullRequests(unittest.TestCase):
 
 
 class OpeningTheSameDatabaseTwice(unittest.TestCase):
-    """The dashboard runs two connections — the reviewer's and the interface's.
+    """The dashboard runs two connections, the reviewer's and the interface's.
 
     On a first run they open the same brand-new file at the same time, and both
     try to switch it to WAL. That needs a brief exclusive lock which SQLite
-    refuses immediately rather than waiting for, so one of them used to raise
-    ``database is locked`` — on the very first launch and never again.
+    refuses immediately rather than waiting for, so without a retry one of them
+    raises ``database is locked``, on the very first launch and never again.
     """
 
     def test_many_threads_can_open_a_new_database_at_once(self) -> None:
@@ -134,9 +134,9 @@ class WorkInFlight(unittest.TestCase):
         self.assertEqual(row["note"], "reading x.py")
 
     def test_a_beat_never_resurrects_finished_work(self) -> None:
-        # An UPDATE, not an upsert. If the row is gone the work is over — or
-        # the tick that owned it died and cleared it — and a late heartbeat
-        # must not put a review back on the board that nobody is running.
+        # An UPDATE, not an upsert. If the row is gone the work is over, or
+        # the tick that owned it died and cleared it. Either way a late
+        # heartbeat must not put a review back on the board nobody is running.
         self.store.begin_active("acme/widgets", 7, "reviewing")
         self.store.end_active("acme/widgets", 7)
         self.store.beat_active("acme/widgets", 7, note="too late")

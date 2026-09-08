@@ -50,7 +50,7 @@ class Summarise(unittest.TestCase):
         self.assertFalse(widgets.busy)
 
     def test_work_held_for_later_is_not_counted_as_needing_you(self) -> None:
-        # It touches paths held for manual approval, so it is marked — but its
+        # It touches paths held for manual approval, so it is marked. But its
         # author still has changes to make, so there is nothing here for you to
         # do. Counting it sends you to a repository to find no job waiting.
         held = [

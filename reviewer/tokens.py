@@ -6,14 +6,14 @@ Printed by ``--dry-run`` so that tuning ``max_total_lines`` or trimming
 Two numbers matter and they are not the same number.
 
 *What this tool sends* is the only part you control, and it is estimated here by
-character count — no tokeniser ships with the standard library, and pulling one
+character count. No tokeniser ships with the standard library, and pulling one
 in for a diagnostic would cost more than the diagnostic is worth. Treat it as
 ±15% and as a way to compare sections against each other, which is what tuning
 needs.
 
 *What the CLI reports* is exact, and is always larger, because every coding-agent
 CLI prepends a system prompt and a set of tool definitions of its own. That gap
-is fixed overhead you cannot edit from this repository — worth seeing once, so
+is fixed overhead you cannot edit from this repository. Worth seeing once, so
 that effort goes where it can actually change something.
 """
 
@@ -33,7 +33,7 @@ USER_SPLIT = re.compile(r"\n\n(?=#{2,3} )")
 SYSTEM_SPLIT = "\n\n---\n\n"
 
 #: Width of the label column, measured from the left margin rather than from
-#: each row's own indent — otherwise the totals sit two characters off the
+#: each row's own indent. Otherwise the totals sit two characters off the
 #: sections they are totalling.
 LABEL_WIDTH = 38
 MAX_LABEL = LABEL_WIDTH - 6
@@ -93,7 +93,7 @@ def report(system: str, user: str, usage: dict[str, Any] | None = None) -> str:
 
     ``usage`` is whatever the provider reported back. Providers differ in what
     they count and some report nothing at all, so every line drawn from it is
-    conditional — a missing figure drops its row rather than printing a zero
+    conditional: a missing figure drops its row rather than printing a zero
     that reads like a measurement.
     """
     lines = [

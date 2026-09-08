@@ -1,8 +1,8 @@
 """Read-only checkouts of PR heads, borrowed from your everyday clone.
 
-The point of this module is to give the model somewhere to read — so it can
-check whether a change follows the conventions of the code around it — without
-disturbing the clone you work in.
+This gives the model somewhere to read without disturbing the clone you work
+in, so it can check whether a change follows the conventions of the code around
+it.
 
 What it does to your repository:
 
@@ -49,7 +49,7 @@ def _run(
 ) -> subprocess.CompletedProcess[str]:
     """Run a git command against ``repo``.
 
-    Never ``cd``s and never uses a bare ``git`` — every call is scoped with
+    Never ``cd``s and never uses a bare ``git``: every call is scoped with
     ``-C`` so it cannot accidentally act on the wrong repository. Retries on lock
     contention, since you may well be running a git command at the same time.
     """
@@ -112,7 +112,7 @@ def safe_prune(repo: Path) -> None:
     ``git worktree prune`` is repository-wide: it deregisters *every* worktree
     whose directory is currently missing. That is fine in a repo where this tool
     is the only thing making worktrees, and not fine in one where an editor or
-    another agent has its own — a worktree on a detached volume, or one an editor
+    another agent has its own. A worktree on a detached volume, or one an editor
     is between operations on, would be quietly unregistered.
 
     So: remove our own by path, and only fall through to the global prune when
@@ -127,7 +127,7 @@ def safe_prune(repo: Path) -> None:
     foreign_stale = [p for p in registered if not _is_ours(p) and not p.exists()]
     if foreign_stale:
         log.get().debug(
-            "skipping `git worktree prune` — %d worktree(s) not ours are stale: %s",
+            "skipping `git worktree prune`, %d worktree(s) not ours are stale: %s",
             len(foreign_stale),
             ", ".join(str(p) for p in foreign_stale[:3]),
         )

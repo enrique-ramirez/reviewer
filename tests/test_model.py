@@ -1,6 +1,6 @@
 """Driving a child process without losing track of it.
 
-These run real subprocesses — this interpreter, given a one-line script — because
+These run real subprocesses (this interpreter, given a one-line script) because
 the things worth testing here are the ones that only go wrong against a real
 pipe: a prompt too large for the kernel buffer, a child that never exits, a
 child killed part-way.
@@ -43,7 +43,7 @@ class RunningACall(unittest.TestCase):
     def test_a_prompt_larger_than_a_pipe_buffer_does_not_deadlock(self):
         # The reason the prompt is written on its own thread. A pipe holds
         # 64KB; a review bundle is bigger, and writing it inline would block
-        # against a child that has not started reading yet — forever, because
+        # against a child that has not started reading yet. Forever, because
         # nothing else is draining its output either.
         big = "x" * 400_000
         result = model.run(child(ECHO), system_prompt="", user_prompt=big)

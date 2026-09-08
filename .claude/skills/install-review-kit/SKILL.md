@@ -1,6 +1,7 @@
 ---
 name: install-review-kit
 description: Install the review agents, prose hook and voice files into the current repository and fill in its review profile. Use when someone asks to set up the review kit, the style hook or the comment reaper in a project.
+argument-hint: [copy|plugin]
 ---
 
 # Install the review kit

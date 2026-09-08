@@ -358,13 +358,14 @@ class ChoosingWhatToRead(unittest.TestCase):
 
 
 class AskingForAnotherLookAtUnchangedCode(unittest.TestCase):
-    """The deadlock a re-review request used to walk into.
+    """The deadlock a re-review request can walk into.
 
     Everything on the pull request is resolved, but the last review was a
     COMMENT, so there is no approval and the merge button stays off. Clicking
-    "Re-request review" is the only move left — and it did nothing, because the
-    duplicate-post guard refused a second review of a SHA that had already had
-    one. The pull request could only be unstuck by pushing a commit.
+    "Re-request review" is the only move left. Without the gate this covers it
+    does nothing, because the duplicate-post guard refuses a second review of a
+    SHA that has already had one, and the pull request can only be unstuck by
+    pushing a commit.
     """
 
     def setUp(self) -> None:

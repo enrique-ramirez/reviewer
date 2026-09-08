@@ -1,74 +1,68 @@
 # Review profile
 
-Copy to `.claude/review-profile.md` in the target repository and fill in every section. The review agents read this first and treat it as fact about the repository. Anything left as a placeholder makes them fall back to generic behaviour and say that they did.
-
-Keep it short. This is the file that stops the agents from inventing a boundary the repository does not have.
+What the review agents need to know about this repository. They read this first and treat it as fact.
 
 ## Boundary
 
-> The one architectural rule that matters here, and how it is enforced.
+`reviewer/tui/` is the dashboard and depends on `reviewer/`. The core never depends on the dashboard, with one deliberate exception: `reviewer/__main__.py` imports `tui` lazily, inside the function that launches it, so a plain run needs neither Textual nor a terminal. Nothing else may import upward.
 
-Example: imports run `app` to `features` to `domain` to `shared`, enforced by the linter.
-Example: `core/` knows nothing of the host application, and everything it needs arrives as a callback.
-Example: no rule worth naming. Say so plainly rather than leaving this blank.
+The second boundary is a security rule rather than an import rule, and it matters more. **The model gets a detached read-only checkout, an empty working directory, and no GitHub token.** `reviewer/model.py` and `reviewer/providers.py` are the only places that can break it. Flag anything that widens what a provider may read or write, that starts a CLI inside the tree being reviewed, or that lets the token reach a child environment.
 
 ## Excluded paths
 
-> Directories and files the agents never touch: generated code, vendored code, lockfiles, scratch.
-
-- `node_modules/`
-- `dist/`
-- `*.local.md`
+- `.venv/`
+- `config/repos/`, `config/global.json`, `.env` (private, gitignored)
+- `logs/`, `debug/`, `*.sqlite3*`
+- `*.local.md`, `*.local.txt`
 
 ## Functional directives
 
-> Suppression comments that are load-bearing here. The agents never delete or weaken one.
+`# noqa` and `# type: ignore`. Never delete or weaken one.
 
-Example: `biome-ignore`, `eslint-disable`, `ts-expect-error`.
-Example: `NOLINT`, `shellcheck disable`, `clang-format off`.
+## Docstrings
+
+A docstring is a comment and is judged as one: it survives where a reader could not recover the fact from the code, and goes where it restates a name or a signature. Nothing here lints for their presence, so there is no floor to protect and no convention to keep a hollow one alive.
+
+The ones carrying a real constraint are expected to survive. A module docstring explaining why `close()` runs first in the destructor, or why the sandbox uses an empty working directory, is exactly the case the test is meant to keep.
 
 ## Documentation map
 
-> One row per documentation file, and the single job it has. The agents flag anything written in the wrong file and anything stated in two.
-
 | file | its job |
 |---|---|
-| `README.md` | what this is and how to use it |
-| `CONTRIBUTING.md` | how to write code here |
-| `ARCHITECTURE.md` | how the pieces fit and why the boundaries sit there |
+| `README.md` | what Blinky is, what it needs, and how to set it up. A pitch and a quickstart, not a reference |
+| `FEATURES.md` | the reference: the dashboard, the three tabs, gates, providers, config, every flag |
+| `CREDITS.md` | prior work this borrows from, and what was borrowed |
+| `personality/` | the review voice, which is product rather than documentation. It is the system prompt |
+
+There is no `CLAUDE.md` or `ARCHITECTURE.md` here. Anything architectural lives in a module docstring beside the code it describes, which is the convention worth keeping.
+
+`personality/*.md` is not documentation about the tool. It is the text sent to the model, so a change there changes what reviews say. Treat it as product.
 
 ## Where an external fact belongs
 
-> When a comment turns out to hold a fact about an outside system, the reaper moves it here rather than deleting it.
-
-Example: `ARCHITECTURE.md`.
-Example: `docs/api.md` for anything the upstream service returns.
+A module docstring in the file that depends on it. GitHub API behaviour goes in `reviewer/gh/`, provider CLI behaviour in `reviewer/providers.py`, and anything a user needs to act on goes in `FEATURES.md` as well.
 
 ## Commands
 
-> Targeted forms only. The agents are forbidden from running a full suite.
-
 | | |
 |---|---|
-| lint | `pnpm lint` |
-| types | `pnpm typecheck` |
-| one test file | `pnpm test path/to/file.spec.ts` |
+| one test file | `.venv/bin/python -m unittest tests.test_waiting -q` |
+| one case | `.venv/bin/python -m unittest tests.test_waiting.TestName.test_case` |
+| everything | `.venv/bin/python -m unittest discover -s tests -q` |
+
+The full run is 403 tests and about seventy-five seconds. It is affordable, but a review still runs only what covers the change.
 
 ## What cannot be verified here
 
-> Code that does not build or run on a normal development machine, so a change to it is reviewed rather than tested. Write "nothing" if that does not apply.
-
-Example: platform-specific sources that only compile on another operating system.
+Anything that reaches GitHub or starts a coding-agent CLI. The suite fakes both. A change to `reviewer/gh/` or `reviewer/providers.py` is reviewed against the fakes and is not proof the real thing still works.
 
 ## Voice
 
-> Which persona governs prose written into this repository. `house` unless there is a reason.
-
 - Documentation and comments: `house`
-- Text posted under a person's name: `house`
+- Text posted under a person's name: `enrique`, and it is `personality/` that carries it into a review
 
 ## Product decisions
 
-> Who decides what this software does for a user, and what the agents do when a diff makes such a decision without them.
+The owner decides. A change to `personality/`, to a gate default, to what a review posts, or to what the model is allowed to read is a product decision, not an implementation detail. Finding one in a diff with no sign the owner was asked is a finding.
 
-Example: the owner decides. An agent that finds an unasked product decision in the diff reports it as a finding and does not implement it.
+The outcome is not written down. The owner is the gatekeeper, not the documentation.

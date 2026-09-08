@@ -680,7 +680,7 @@ class Paging(unittest.IsolatedAsyncioTestCase):
 
 
 class DatePicker(unittest.IsolatedAsyncioTestCase):
-    """The date range, which used to be a blind four-way cycle on `t`."""
+    """The date range, picked from a list that `t` opens."""
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -778,8 +778,8 @@ class DatePicker(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.history.table.has_focus)
 
     async def test_clearing_the_filters_moves_the_picker_back(self) -> None:
-        # The control shows the range as well as setting it, so it has to
-        # follow a change made from anywhere else.
+        # The control shows the range and sets it, so it has to follow a
+        # change made from anywhere else.
         app = self._app()
         async with app.run_test(size=(120, 40)) as pilot:
             await self._open(pilot)

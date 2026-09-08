@@ -1,11 +1,12 @@
 ---
 name: review
 description: Run the style-reviewer then comment-reaper pass over a target. Use before asking for a commit, or when someone says to review a diff, a commit or a path. Takes an optional target; defaults to uncommitted changes.
+argument-hint: [<path>|<ref>|<range>]
 ---
 
 # Review pass
 
-Two agents, always in this order. `style-reviewer` settles structure and naming; `comment-reaper` then decides which comments survive what is left. Running them the other way round writes comments for code that is about to move.
+Two agents, always in this order, and `humanize` after both if the prose still needs it. `style-reviewer` settles structure and naming; `comment-reaper` then decides which comments survive what is left. Running them the other way round writes comments for code that is about to move.
 
 ## Work out the target
 
@@ -13,9 +14,11 @@ The argument, if there is one, is the target. With no argument, use uncommitted 
 
 | argument looks like | target |
 |---|---|
-| nothing | `git status --short` plus `git diff` |
+| nothing | uncommitted work: `git diff HEAD` for every tracked change, staged or not, plus anything `git status --porcelain --untracked-files=all` reports as untracked |
 | a ref, a range, `HEAD~3..HEAD` | that commit or range |
 | a path | the files under it |
+
+`git diff` alone shows unstaged work only, so anything already staged would be reviewed as though it did not exist. `git diff HEAD` covers both, and `--untracked-files=all` catches a new file that has no diff yet and must be read whole.
 
 Say the target back before you start, so a wrong reading costs one line instead of a full pass.
 

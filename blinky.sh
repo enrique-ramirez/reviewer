@@ -5,7 +5,7 @@
 # first time.
 # `./blinky.sh --lean` is the plain scrolling log with no dependencies at all.
 #
-# Arguments that name a specific job — `--once`, `--check`, `--backfill` — run
+# Arguments that name a specific job (`--once`, `--check`, `--backfill`) run
 # that job and exit, so they get the plain output and never install anything.
 # A pipe or a cron job gets the same treatment: there is no terminal to draw a
 # dashboard on, and nothing should sit waiting on a prompt.
@@ -26,8 +26,8 @@ err()   { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 
 # ---------------------------------------------------------------- interpreter
 
-# Prefer the project venv when it exists — that is where Textual lives — and
-# fall back to the system Python, which is all the reviewer itself needs.
+# Prefer the project venv when it exists, since that is where Textual lives.
+# Fall back to the system Python, which is all the reviewer itself needs.
 pick_python() {
   if [ -x "$VENV/bin/python3" ]; then
     echo "$VENV/bin/python3"
@@ -89,8 +89,8 @@ ensure_textual() {
 # ------------------------------------------------------------------ launching
 
 # Arguments that mean "no dashboard": either asked for plainly, or a one-off
-# job that prints its answer and exits. Everything else — no arguments at all,
-# or modifiers like --debug and --dry-run — is the watch loop, which is what
+# job that prints its answer and exits. Everything else (no arguments at all,
+# or modifiers like --debug and --dry-run) is the watch loop, which is what
 # the dashboard is for.
 wants_plain() {
   local arg
@@ -113,7 +113,7 @@ if wants_plain "$@"; then
   exec "$PY" -m reviewer "$@"
 fi
 
-# Asked for by name — make sure the dependency is there, then hand over
+# Asked for by name: make sure the dependency is there, then hand over
 # unchanged rather than passing --tui twice.
 if [[ " $* " == *" --tui "* ]]; then
   ensure_textual || true

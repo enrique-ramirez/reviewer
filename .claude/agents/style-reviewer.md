@@ -19,9 +19,11 @@ Whoever ran you names the target. Default to uncommitted changes.
 
 | target | how to get it |
 |---|---|
-| uncommitted changes (default) | `git status --short` and `git diff` |
+| uncommitted changes (default) | `git diff HEAD`, plus anything `git status --porcelain --untracked-files=all` reports as untracked |
 | a commit or a range | `git show <ref>` or `git diff <base>..<head>` |
 | a path | read the files under it, and say up front that you are reviewing existing code rather than a change |
+
+`git diff` alone shows unstaged work only, so anything already staged would be reviewed as though it did not exist. `git diff HEAD` covers both, and `--untracked-files=all` catches a new file that has no diff yet and must be read whole.
 
 Review nothing outside the target. Never touch the excluded paths in the profile.
 

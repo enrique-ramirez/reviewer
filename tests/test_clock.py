@@ -1,7 +1,7 @@
 """The two clocks, and what each of them is for.
 
 These tests fake a suspend by moving the wall clock forward while leaving the
-monotonic clock where it was — which is exactly what macOS does to a process
+monotonic clock where it was, which is exactly what macOS does to a process
 that was running when the lid closed.
 """
 

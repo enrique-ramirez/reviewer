@@ -112,9 +112,12 @@ def assistant(*blocks: dict) -> dict:
 
 class ClaudeStreaming(unittest.TestCase):
     """stream-json, which is what makes a stuck call distinguishable from a slow
-    one — a call that has printed nothing for ten minutes looks nothing like a
-    call that is ten minutes in and still working, but only if something is
-    reading the lines as they arrive."""
+    one.
+
+    A call that has printed nothing for ten minutes looks nothing like a call
+    that is ten minutes in and still working, but only if something is reading
+    the lines as they arrive.
+    """
 
     def test_it_asks_for_a_stream_and_the_verbose_flag_that_needs(self):
         _, call = prepare("claude")
@@ -166,7 +169,7 @@ class ClaudeStreaming(unittest.TestCase):
 
     def test_a_stream_with_no_result_event_falls_back_to_what_was_said(self):
         # A call killed part-way still has the model's own words in it, and
-        # those are a far better guess than the raw JSONL — which would reach
+        # those are a far better guess than the raw JSONL, which would reach
         # the JSON extractor as a wall of events and fail to parse.
         adapter, call = prepare("claude")
         reply = adapter.read(

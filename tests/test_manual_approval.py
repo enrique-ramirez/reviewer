@@ -1,11 +1,11 @@
 """Which pull requests are held back for a person.
 
 The rule that matters here is ``approval.manual_only_when.touches_paths``, and
-it is the one that is easiest to get silently wrong: it needs the list of files
-a pull request changed, and for a long time the dashboard scan passed it an
-empty list. Every rule still ran, none of them could match, and a repository
-whose only manual-approval rule was a path pattern showed every pull request as
-needing nobody — right up until a review finished and found out otherwise.
+it is the one that is easiest to get silently wrong. It needs the list of files
+a pull request changed. Hand the dashboard scan an empty list instead and every
+rule still runs, none of them can match, and a repository whose only
+manual-approval rule is a path pattern shows every pull request as needing
+nobody, right up until a review finishes and finds out otherwise.
 """
 
 from __future__ import annotations

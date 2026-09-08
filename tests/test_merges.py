@@ -62,7 +62,7 @@ def global_config() -> GlobalConfig:
 
 
 class FakeRest:
-    """``get_pull`` and nothing else — the only call this path makes."""
+    """``get_pull`` and nothing else: the only call this path makes."""
 
     def __init__(self, pulls: dict[int, dict[str, Any]]) -> None:
         self.pulls = pulls

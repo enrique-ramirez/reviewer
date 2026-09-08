@@ -172,7 +172,7 @@ CREATE INDEX IF NOT EXISTS review_events_pr
 -- The historic record, and the only table meant to outlive a pull request:
 -- pr_view holds what is open right now and is emptied as things merge. A row
 -- lands here once, when a PR we reviewed leaves the open list having been
--- merged, and is never rewritten — ``description`` costs a model call, so
+-- merged, and is never rewritten. ``description`` costs a model call, so
 -- re-recording would mean paying for it twice.
 CREATE TABLE IF NOT EXISTS merged_prs (
     repo               TEXT NOT NULL,
@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS merged_prs (
     description_tries  INTEGER NOT NULL DEFAULT 0,
     -- Fetched by a backfill rather than watched as it happened. ``recorded_at``
     -- says when we wrote the row down, which for a backfill is "just now" for
-    -- something that merged months ago — so it cannot be used to answer "what
+    -- something that merged months ago, so it cannot be used to answer "what
     -- landed while I was watching". This can.
     backfilled         INTEGER NOT NULL DEFAULT 0,
     recorded_at        REAL NOT NULL,
@@ -272,7 +272,7 @@ def default_state_dir() -> Path:
 def adopt_legacy_state_dir(state_dir: Path) -> Path | None:
     """Carry an older build's state over to the renamed directory.
 
-    The database in there is the whole history — every merge, every review, and
+    The database in there is the whole history: every merge, every review, and
     every summary already paid for. A rename that left it behind would look
     exactly like the tool having forgotten everything.
 
@@ -297,8 +297,8 @@ def adopt_legacy_state_dir(state_dir: Path) -> Path | None:
 def _enable_wal(conn: sqlite3.Connection, attempts: int = 20, wait: float = 0.05) -> None:
     """Turn on WAL, tolerating another connection doing the same thing.
 
-    The dashboard opens two connections to the same file — one on the reviewer's
-    thread, one for the interface — and on a first run they race. Switching
+    The dashboard opens two connections to the same file, one on the reviewer's
+    thread and one for the interface, and on a first run they race. Switching
     journal mode wants a brief exclusive lock, and SQLite answers ``database is
     locked`` immediately for it rather than waiting out ``busy_timeout`` the way
     an ordinary statement would. So the loser of that race used to raise, on the
@@ -324,7 +324,7 @@ def heartbeat(store: "Store", repo: str, pr_number: int) -> Any:
 
     Here rather than in ``model`` because the database is this module's business
     and the model call has no idea one exists. Takes anything with the fields of
-    a ``model.Progress`` — the two modules stay unaware of each other, and the
+    a ``model.Progress``, so the two modules stay unaware of each other and the
     tests can beat this with a stub.
     """
 
@@ -345,7 +345,7 @@ class Store:
         """Open the state database.
 
         ``filename`` exists so ``--dry-run`` can use a separate file. A dry run
-        must not record "reviewed" against live state — that would make the next
+        must not record "reviewed" against live state. That would make the next
         real run skip a PR it never actually reviewed. Equally, repeating a dry
         run should not repeat the whole review, which is minutes of work. A
         second database gives both: rehearsals are idempotent among themselves
@@ -422,8 +422,8 @@ class Store:
 
         if "merged_prs.backfilled" in added:
             # Rows written by a backfill before the column existed. They carry a
-            # signature nothing else writes — the author's title as the summary,
-            # with description retries already exhausted — and without this they
+            # signature nothing else writes (the author's title as the summary,
+            # with description retries already exhausted), and without this they
             # would go on claiming to have merged during whichever run fetched
             # them.
             self.conn.execute(
@@ -540,7 +540,7 @@ class Store:
     ) -> tuple[int, bool]:
         """Increment a thread's disagreement counter.
 
-        Returns ``(rounds, capped)``. The cap is per thread — other threads on
+        Returns ``(rounds, capped)``. The cap is per thread: other threads on
         the same PR, and later review rounds, are unaffected.
         """
         rounds = self.get_thread_rounds(repo, pr_number, thread_id) + 1
@@ -665,8 +665,8 @@ class Store:
     def forget_closed(self, repo: str, open_numbers: list[int]) -> None:
         """Drop board rows for pull requests that are no longer open.
 
-        An empty list means every pull request closed, not "no information" —
-        the caller returns early when the listing itself failed, so reaching
+        An empty list means every pull request closed, not "no information".
+        The caller returns early when the listing itself failed, so reaching
         here with nothing means the repository genuinely has none open. Bailing
         out on empty would leave the last PR on the board forever.
         """
@@ -721,8 +721,8 @@ class Store:
         annotated "twelve of those asleep, last spoke four seconds ago" is not.
 
         Deliberately an UPDATE and not an upsert. If the row is gone the work is
-        over — or the tick that owned it died and cleared it — and a heartbeat
-        must not be the thing that resurrects a review nobody is running.
+        over, or the tick that owned it died and cleared it. Either way a
+        heartbeat must not resurrect a review nobody is running.
         """
         self.conn.execute(
             """
@@ -841,10 +841,10 @@ class Store:
     def has_reviewed(self, repo: str, pr_number: int) -> bool:
         """Whether we ever posted anything on this pull request.
 
-        Approval is not the bar — a PR we commented on or requested changes on
+        Approval is not the bar. A PR we commented on or requested changes on
         is one we have an opinion about, and its merge is worth recording.
 
-        ``pr_state`` is consulted as well as ``review_events`` so that pull
+        ``pr_state`` is consulted alongside ``review_events``, so that pull
         requests reviewed by earlier versions of this tool, before the events
         table existed, still count.
         """
@@ -868,8 +868,8 @@ class Store:
         looked at and to tell "we skipped this because nothing changed" apart
         from "we have never looked at this".
 
-        ``pr_state`` is consulted as well as ``review_events`` for the same
-        reason :meth:`has_reviewed` consults it — pull requests reviewed by
+        ``pr_state`` is consulted alongside ``review_events`` for the same
+        reason :meth:`has_reviewed` consults it: pull requests reviewed by
         earlier versions of this tool, before the events table existed, still
         count.
         """
@@ -1070,9 +1070,9 @@ class Store:
     ) -> list[dict[str, Any]]:
         """Merges still owed a description, oldest first.
 
-        A description can fail — the model call times out, the CLI is missing —
-        and the merge is recorded either way, so these are retried on later
-        ticks and a transient failure costs a delay rather than the summary.
+        A description can fail: the model call times out, the CLI is missing.
+        The merge is recorded either way, so these are retried on later ticks
+        and a transient failure costs a delay rather than the summary.
 
         ``max_tries`` is what stops that retry from becoming permanent: with the
         configured provider's CLI missing from PATH, every merge would otherwise

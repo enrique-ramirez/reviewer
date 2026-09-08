@@ -40,8 +40,8 @@ def _go(reason: str, trigger: str) -> Decision:
 def ci_status(snapshot: PRSnapshot, cfg: RepoConfig) -> tuple[str, list[str]]:
     """Reduce the check rollup to ``green`` / ``pending`` / ``failing`` / ``unknown``.
 
-    The rollup covers check runs and commit statuses. Branch-protection rules —
-    including "an approving review is required" — are not check runs and never
+    The rollup covers check runs and commit statuses. Branch-protection rules
+    (including "an approving review is required") are not check runs and never
     appear here, so waiting on CI never means waiting on ourselves.
 
     ``unknown`` means the token cannot read the rollup at all. That is
@@ -85,7 +85,7 @@ def ci_status(snapshot: PRSnapshot, cfg: RepoConfig) -> tuple[str, list[str]]:
     if pending:
         return "pending", pending
     if not snapshot.checks.contexts:
-        # No checks configured at all. Treated as green — a repo without CI
+        # No checks configured at all. Treated as green: a repo without CI
         # should not be a repo the reviewer refuses to look at.
         return "green", []
     return "green", []
@@ -149,7 +149,7 @@ def evaluate(
         status, detail = ci_status(snapshot, cfg)
         if status == "unknown":
             return _skip(
-                "cannot read CI status — the token needs 'Checks: Read-only' and "
+                "cannot read CI status. The token needs 'Checks: Read-only' and "
                 "'Commit statuses: Read-only'. Add them, or set "
                 "gates.require_ci_green to false to review without checking CI"
             )
@@ -168,12 +168,12 @@ def evaluate(
         return _go("re-review requested", "review_requested")
 
     # A pull request that has gone round this many times is not going to be
-    # settled by another review. Asking for one explicitly still works — the
+    # settled by another review. Asking for one explicitly still works. The
     # check sits below that on purpose.
     max_rounds = (cfg.review.get("rounds") or {}).get("max_rounds")
     if max_rounds is not None and pr_state.review_round >= int(max_rounds):
         return _skip(
-            f"{pr_state.review_round} review rounds already — at the "
+            f"{pr_state.review_round} review rounds already, at the "
             f"review.rounds.max_rounds limit of {max_rounds}. Ask for a "
             "re-review to override, or merge it."
         )
@@ -194,8 +194,8 @@ def needs_manual_approval(
 ) -> tuple[bool, str]:
     """Check the conditions that hold an approval back for a human.
 
-    Returns ``(True, reason)`` when this PR should wait for you even though the
-    review itself found nothing to block on.
+    Returns ``(True, reason)`` when this PR should wait for you despite the
+    review itself finding nothing to block on.
     """
     approval = cfg.approval
     if approval.get("mode") == "manual":

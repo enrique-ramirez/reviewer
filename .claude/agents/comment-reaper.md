@@ -15,7 +15,7 @@ If it is missing, work from the general rules below, say in your report that you
 
 ## Scope
 
-Whoever ran you names the target. Default to uncommitted changes: `git status --short` and `git diff`. A commit, a range or a path is also valid; for a path, say up front that you are reaping existing code rather than a change.
+Whoever ran you names the target. Default to uncommitted work: `git diff HEAD` for every tracked change, staged or not, plus anything `git status --porcelain --untracked-files=all` reports as untracked. `git diff` alone shows unstaged work only, so anything already staged would be reviewed as though it did not exist. `git diff HEAD` covers both, and `--untracked-files=all` catches a new file that has no diff yet and must be read whole. A commit, a range or a path is also valid; for a path, say up front that you are reaping existing code rather than a change.
 
 Run after `style-reviewer`. It settles the structure, you describe what is left. Running first means writing comments for code that is about to be restructured.
 
@@ -94,7 +94,7 @@ The experiment that produced this procedure found more defects in the *code* tha
 
 ## How to verify
 
-If you only deleted comments, run nothing. Confirm with `git diff` that no executable line moved, and say you checked.
+If you only deleted comments, run nothing. Confirm with `git diff HEAD` that no executable line moved, and say you checked.
 
 If you made a rename or an extraction, run the targeted checks from the profile. **Never run the full suite**; it loads the machine and floods the context. Where the profile says part of the tree cannot be verified here, say that a change there was reviewed rather than tested.
 

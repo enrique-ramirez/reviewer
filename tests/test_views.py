@@ -200,7 +200,7 @@ class ActivityLine(unittest.TestCase):
 
     def test_a_long_silent_final_write_up_is_not_called_quiet(self) -> None:
         # The stream carries one event per turn, not per token, so the last
-        # turn — the write-up itself — is legitimately silent for minutes. The
+        # turn (the write-up itself) is legitimately silent for minutes. The
         # threshold sits above that on purpose.
         text = self.line(Activity("reviewing", NOW - 900, silent_seconds=420))
         self.assertNotIn("quiet", text)

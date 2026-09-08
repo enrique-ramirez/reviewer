@@ -1,9 +1,16 @@
 ---
 name: humanize
 description: Rewrite prose so it reads as written by a person rather than an assistant. Use on documentation, comments, pull request text or release notes, and when someone says a file sounds robotic or AI-written.
+argument-hint: <path> [<path> ...]
 ---
 
 # Humanize
+
+## Run this last
+
+`comment-reaper` decides which comments survive; this decides how the survivors read. Run it after the reaper, never before. Polishing prose that is about to be deleted is wasted, and the reaper judges a comment on whether a reader could recover the fact without it, which is not a question about how well it is written.
+
+Where the target is documentation rather than code comments, the ordering does not apply and this can run alone.
 
 ## Load the voice
 

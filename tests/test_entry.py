@@ -49,8 +49,8 @@ class RunWithTui(unittest.TestCase):
         """Start the dashboard, capture the Runtime, stop immediately.
 
         ``tui.run`` is where the interface would take over the main thread, so
-        standing in for it is what makes this runnable without a terminal — and
-        the Runtime it is handed is exactly what the rest of the tool sees.
+        standing in for it is what makes this runnable without a terminal. The
+        Runtime it is handed is exactly what the rest of the tool sees.
         """
         args = argparse.Namespace(
             dry_run=False, force=False, repo=None, pr=None, debug=False
