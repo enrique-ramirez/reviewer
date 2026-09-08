@@ -76,7 +76,7 @@ class Flag:
 
 DISAGREEMENT = Flag(
     "!", URGENT, "settle a disagreement", 0,
-    "a thread went back and forth too many times — it is parked for you",
+    "a thread went back and forth too many times, so it is parked for you",
 )
 APPROVAL = Flag(
     "?", NEEDS_YOU, "needs your approval", 1,
@@ -92,7 +92,7 @@ MERGEABLE = Flag(
 )
 MERGE_PENDING = Flag(
     "~", SETTLED, "yours · merge check pending", 4,
-    "yours: approved — GitHub is still working out mergeability",
+    "yours: approved, but GitHub is still working out mergeability",
 )
 REPLIES = Flag(
     "»", NEEDS_YOU, "replies to check", 5,
@@ -100,7 +100,7 @@ REPLIES = Flag(
 )
 HELD = Flag(
     "◦", PENDING, "will need you", 6,
-    "held for manual approval — it will wait for you once it is clean",
+    "held for manual approval, and it will wait for you once it is clean",
     wants_you=False,
 )
 

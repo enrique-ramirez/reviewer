@@ -5,7 +5,7 @@ be a column of screen width spent naming the only repository there is.
 
 Collapsing it does not hide it. A sidebar that vanishes takes the fact that
 there *are* other repositories with it, so what is left is a rail of Pac-Man
-ghosts — one per repository, coloured the way its row would have been. You can
+ghosts, one per repository, coloured the way its row would have been. You can
 still see there are three of them and that one has gone yellow.
 """
 

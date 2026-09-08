@@ -30,7 +30,7 @@ RepoSidebar:focus { border-right: solid $accent; }
 /* Collapsed is a rail, not a disappearance: one glyph per repository, so the
    fact that there are others survives folding the panel away. */
 RepoSidebar.collapsed { width: 6; }
-/* Collapsed, the header is just the arrow — centred, so it lines up with the
+/* Collapsed, the header is just the arrow, centred so it lines up with the
    rail of ghosts under it rather than hanging off the top. */
 RepoSidebar.collapsed SidebarHeader {
     height: 3;
@@ -73,8 +73,8 @@ RecordView { height: 1fr; }
 RecordView > Horizontal { height: 1fr; }
 
 /* The two columns of a tab. The divider belongs to the column rather than to
-   the table, so it runs past the status line underneath — which is what says
-   that line is about the list and not about the whole screen. */
+   the table, so it runs past the status line underneath. That is what says
+   the line is about the list and not about the whole screen. */
 .listing {
     width: 3fr;
     height: 1fr;
@@ -92,7 +92,7 @@ RecordView > Horizontal { height: 1fr; }
     background: $panel;
 }
 /* Three equal slots. Equal is what makes the middle one's centre the bar's
-   centre — with an auto-width slot on either side it would drift with whatever
+   centre. With an auto-width slot on either side it would drift with whatever
    they happened to contain. */
 .underbar StatusBar.counts { width: 1fr; }
 .underbar StatusBar.pager  { width: 1fr; content-align: center middle; }
@@ -138,15 +138,15 @@ StatusBar {
 /* Hidden rather than shrunk, so the space goes back to the table. */
 #log.hidden { display: none; }
 
-/* The History filter bar: a date picker that shows the current range, sitting
-   where the dim key hints used to be. One row, so it costs the table almost
-   nothing — page size follows the height that is left. */
+/* The History filter bar: a date picker that shows the current range. One row,
+   so it costs the table almost nothing: page size follows the height that is
+   left. */
 #history_filters {
     height: 1;
     padding: 0;
     /* Equal thirds put the page count on the bar's centre, but a third of a
        narrow column cannot hold a date control. The floor keeps the control
-       whole and lets the centring drift instead — a page count a few columns
+       whole and lets the centring drift instead. A page count a few columns
        off centre is a smaller loss than a clipped filter. */
     min-width: 20;
 }

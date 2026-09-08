@@ -138,7 +138,7 @@ class RecordView(Vertical):
     ) -> tuple[tuple[Action, ...], Action | None]:
         """The buttons under the pane: things to do, and the way out.
 
-        A record with no URL offers no way out — an empty pane should not carry
+        A record with no URL offers no way out: an empty pane should not carry
         a button that cannot work.
         """
         if record is None or not getattr(record, "url", ""):

@@ -1,12 +1,13 @@
 """The dashboard: three tabs, one poll, and the keys that move between them.
 
-**Dashboard** is the live board — what is open right now and what wants a human.
-**Summary** is what landed while you were watching, so automating the reviewing
-does not mean losing track of what is going into the repository. **History** is
-the same record without the time limit. The next-scan line lives in the header
-and the log pane below all three, because both describe the run rather than any
-one view — and a run-wide line wedged between a tab and the log read as
-belonging to whichever pane was above it.
+Dashboard is the live board: what is open right now and what wants a human.
+Summary is what landed while you were watching, so automating the reviewing does
+not mean losing track of what is going into the repository. History is the same
+record without the time limit.
+
+The next-scan line lives in the header and the log pane below all three. Both
+describe the run rather than any one view, and a run-wide line wedged between a
+tab and the log read as belonging to whichever pane was above it.
 
 The reviewer runs on a background thread and writes to SQLite; this reads the
 same database on a timer and calls neither GitHub nor the model. Nothing here
@@ -80,7 +81,7 @@ class RunHeader(Header):
         recognisably the same character.
 
         Presentation only: ``app.title`` stays a plain string, so anything that
-        reads it — the terminal's own tab, a test — gets the name rather than
+        reads it (the terminal's own tab, a test) gets the name rather than
         markup.
         """
         title = self.screen_title
@@ -112,7 +113,7 @@ DASHBOARD, SUMMARY, HISTORY = "dashboard", "summary", "history"
 
 
 NAME = "Blinky"
-"""After Pac-Man's red ghost — the one already at the end of the countdown."""
+"""After Pac-Man's red ghost, the one already at the end of the countdown."""
 
 
 def tab_label(title: str, count: int | None = None) -> str:
@@ -122,8 +123,8 @@ def tab_label(title: str, count: int | None = None) -> str:
     through ``Content.from_markup``, which takes a string.
 
     The count rides on the tab rather than in the window title because it is
-    true of one tab and not of the others — a subtitle saying "6 open" while
-    you were reading History was answering a question nobody had asked.
+    true of one tab and not of the others. A subtitle saying "6 open" while you
+    were reading History was answering a question nobody had asked.
     """
     underlined = f"[u]{title[0]}[/u]{title[1:]}"
     return underlined if count is None else f"{underlined} ({count})"
@@ -142,7 +143,7 @@ class Runtime:
     wake: threading.Event | None = None
     """Set to cut the wait short and start the next scan now.
 
-    None when nothing is watching it — ``--lean`` has no interface to press the
+    None when nothing is watching it: ``--lean`` has no interface to press the
     key, and a test builds a runtime without a worker behind it.
     """
     pause: threading.Event | None = None
@@ -165,7 +166,7 @@ class Dashboard(App[None]):
         Binding("q", "quit", "Quit"),
         # The tab bar carries these itself with the letter underlined, so
         # repeating them below would spend a third of a one-line footer on what
-        # is already on screen. `t` rather than `d` for the date range — `d`
+        # is already on screen. `t` rather than `d` for the date range: `d`
         # reads as Dashboard once the tabs have letters.
         Binding("d", f"show_tab('{DASHBOARD}')", "Dashboard", show=False),
         Binding("s", f"show_tab('{SUMMARY}')", "Summary", show=False),
@@ -196,10 +197,10 @@ class Dashboard(App[None]):
     # everywhere. Summary has none of its own: it shows this run and nothing
     # else, which is the whole point of it.
     #
-    # This is not only about what to advertise: a disabled binding is not
-    # dispatched at all, so it is also what keeps a key meant for a live pull
-    # request from reaching a merged one. Stopping a review is the case in
-    # point — only the Dashboard's rows have a review to stop.
+    # Advertising is half of it. A disabled binding is not dispatched at all,
+    # so this is also what keeps a key meant for a live pull request from
+    # reaching a merged one. Stopping a review is the case in point: only the
+    # Dashboard's rows have a review to stop.
     TAB_ACTIONS = {
         "author_filter": HISTORY,
         "cycle_window": HISTORY,
@@ -292,8 +293,8 @@ class Dashboard(App[None]):
     def typing(self) -> bool:
         """True while a filter control has focus, so letter keys stay letters.
 
-        Covers the date picker as well as the author box: an open dropdown that
-        let `q` quit underneath it would be a trap.
+        Covers the date picker and the author box: an open dropdown that let
+        `q` quit underneath it would be a trap.
         """
         return isinstance(self.focused, Input) or self.picking
 
@@ -302,7 +303,7 @@ class Dashboard(App[None]):
         """Whether the date picker has the keyboard.
 
         Expanding a Select moves focus into an overlay rather than keeping it on
-        the control, so asking what is focused is not enough — the question is
+        the control, so asking what is focused is not enough. The question is
         whether focus is anywhere inside it.
         """
         focused = self.focused
@@ -450,7 +451,7 @@ class Dashboard(App[None]):
 
         Runs about eight times a second, so it redraws from the values already
         in hand and touches only the cells that animate. When nothing is under
-        way — the usual case — it costs three checks and returns.
+        way (the usual case) it costs three checks and returns.
         """
         if not self.is_running:
             return
@@ -512,8 +513,8 @@ class Dashboard(App[None]):
         The redraw on its own was the whole of this key, and on a quiet board it
         looked broken: everything it reads was already on screen a second ago,
         so pressing it changed nothing visible. What people reach for this key
-        expecting is a scan, so it asks for one — and says so, because the work
-        happens on another thread and the first sign of it is a log line a
+        expecting is a scan, so it asks for one. It says so too, because the
+        work happens on another thread and the first sign of it is a log line a
         moment later.
         """
         self.reload()
@@ -530,7 +531,7 @@ class Dashboard(App[None]):
         if phase != "waiting" and not status.get("paused"):
             # A pass is already running. Setting the event would queue another
             # one the moment this finishes, which is not what the key means.
-            self.notify(f"already running — {phase}", timeout=3)
+            self.notify(f"already running: {phase}", timeout=3)
             return
 
         wake.set()
@@ -543,16 +544,16 @@ class Dashboard(App[None]):
         to the end, because abandoning a review halfway is a much bigger thing
         than skipping the next one and there is a separate key for it.
 
-        Asking for a scan still works while paused. The two compose — pause is
-        the standing setting, `r` is a one-off — and a scan you asked for by
-        hand leaves the pause where it was.
+        Asking for a scan still works while paused. The two compose: pause is
+        the standing setting, `r` is a one-off. A scan you asked for by hand
+        leaves the pause where it was.
         """
         if self.typing:
             return
 
         pause = self.runtime.pause
         if pause is None:
-            self.notify("nothing to pause — no scan loop is running", timeout=3)
+            self.notify("nothing to pause: no scan loop is running", timeout=3)
             return
 
         if pause.is_set():
@@ -560,7 +561,7 @@ class Dashboard(App[None]):
             self.notify("scanning again", timeout=2)
         else:
             pause.set()
-            self.notify("paused — press p to start again", timeout=3)
+            self.notify("paused, press p to start again", timeout=3)
         self.refresh_bindings()
 
     def action_show_tab(self, tab: str) -> None:
@@ -599,7 +600,7 @@ class Dashboard(App[None]):
         The escape hatch for a review that has genuinely stopped moving, and the
         reason nothing else in this tool kills one automatically. A review is
         minutes of work and real quota, and from the outside a slow call and a
-        stuck one look identical — so the board says what it can see (how long,
+        stuck one look identical. So the board says what it can see (how long,
         how much of it asleep, how long since the model last spoke) and leaves
         the judgement to whoever is reading it.
 
@@ -620,7 +621,7 @@ class Dashboard(App[None]):
         if model.cancel(record.key):
             self.notify(f"stopping the review of #{record.number}…", timeout=3)
         else:
-            # The row says live work but no process answers to it — the call
+            # The row says live work but no process answers to it: the call
             # finished between the last redraw and this keystroke.
             self.notify(f"#{record.number} had already finished", timeout=3)
 
@@ -652,7 +653,7 @@ class Dashboard(App[None]):
     def _roll_page(self, delta: int) -> bool:
         """Carry the cursor onto the next page when it runs off this one.
 
-        History is paged rather than scrolled — 1,594 rows should not all be
+        History is paged rather than scrolled: 1,594 rows should not all be
         held in memory to look at twenty. But paging that stops the cursor dead
         at the last row reads as "this is all there is", which is the wrong
         thing to tell someone with sixty-three more pages. So the obvious motion
@@ -779,7 +780,7 @@ class Dashboard(App[None]):
 
         While typing it restores what was there before, so a half-typed name is
         never applied. Otherwise it clears the author and the date range in one
-        go — filters are easy to set and were otherwise fiddly to undo.
+        go. Filters are easy to set and were fiddly to undo.
         """
         if event.key != "escape":
             return

@@ -1,4 +1,4 @@
 # Globs exempt from the style hook, matched against the absolute path.
 # The voice files quote what they forbid, and the sample config is data.
-*/reviewer/.claude/voice/*
+*/.claude/voice/*
 */config/repos.sample/*

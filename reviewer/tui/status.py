@@ -95,7 +95,7 @@ def wants_you(pull_request: PullRequest) -> bool:
 
     Narrower than carrying a flag. A pull request held for manual approval while
     its author still has changes to make is marked, because it is worth knowing
-    it is coming — but it is not work you can pick up, so it does not belong in
+    it is coming. But it is not work you can pick up, so it does not belong in
     a count of what needs you or in the filter that shows only that.
     """
     flag = attention(pull_request)
@@ -113,7 +113,7 @@ def peer_verdict(pull_request: PullRequest) -> Status:
     if "CHANGES_REQUESTED" in states:
         return Status("changes req.", URGENT)
     if "APPROVED" in states:
-        # Approved, but reviewDecision is not — usually branch protection
+        # Approved, but reviewDecision is not, usually branch protection
         # wanting a second approval.
         return Status("needs 1 more", NEEDS_YOU)
     if states:
@@ -129,7 +129,7 @@ def status_of(pull_request: PullRequest) -> Status:
     """The one-phrase answer to "where is this", live work first."""
     activity = pull_request.activity
     if activity is not None:
-        # Gone quiet rather than merely slow — the model has printed nothing for
+        # Gone quiet rather than merely slow: the model has printed nothing for
         # long enough that it is worth a colour. Not the same claim as "hung":
         # this says what is observable and leaves the verdict to the reader.
         if activity.is_stalled:

@@ -57,7 +57,7 @@ def longest_running(pull_requests: Sequence[PullRequest], now: float) -> float:
 def subtitle(pull_requests: Sequence[PullRequest]) -> str:
     """What the header adds after the title.
 
-    Not how many are open — that is on the Dashboard tab, which is the thing it
+    Not how many are open. That is on the Dashboard tab, which is the thing it
     is true of. What is left is the part a title should carry: whether any of
     them want you.
     """
@@ -99,9 +99,9 @@ def legend(pull_requests: Sequence[PullRequest] = (), width: int = 0) -> Text:
     """A key to the marks that are actually on the board right now.
 
     Two things it is not. It is not a catalogue of every mark the tool can
-    produce — explaining symbols that are not on screen crowds out the ones that
-    are. And it is not allowed to overflow: the bar is one line, so a legend
-    wider than the pane used to be cut wherever the pane ended, which is how you
+    produce: explaining symbols that are not on screen crowds out the ones that
+    are. And it is not allowed to overflow. The bar is one line, so a legend
+    wider than the pane would be cut wherever the pane ends, which is how you
     get "? needs your" and no idea what it needs.
 
     So: only the flags in use, most urgent first, and if even those do not fit,
@@ -120,7 +120,7 @@ def legend(pull_requests: Sequence[PullRequest] = (), width: int = 0) -> Text:
         if len(shown) == 1:
             # Narrower than a single entry. An ellipsis is the difference
             # between a phrase that reads as finished and one that admits it
-            # was cut — which is the whole complaint this function answers.
+            # was cut, which is the whole complaint this function answers.
             text.truncate(width, overflow="ellipsis")
             return text
         shown.pop()
@@ -131,8 +131,8 @@ def live_status(pull_request: PullRequest, now: float, frame: int) -> str:
     activity = pull_request.activity
     label = status.status_of(pull_request).text
     # For a call that has gone quiet the useful number is how long it has been
-    # quiet, not how long it has been running — and it is the shorter of the
-    # two, which is what keeps this inside the column.
+    # quiet, not how long it has been running. It is the shorter of the two,
+    # which is what keeps this inside the column.
     seconds = (
         activity.silent_seconds if activity.is_stalled else activity.running_for(now)
     )
@@ -175,7 +175,7 @@ def _byline(pull_request: PullRequest) -> Text:
 
 
 def _activity_line(pull_request: PullRequest, now: float, frame: int) -> Text | None:
-    """The live line: how long, and — when they differ — why it is that long.
+    """The live line: how long, and (when they differ) why it is that long.
 
     A bare elapsed time is what made a slept-through review indistinguishable
     from a hung one. The clock a person watches counts the hours their laptop
@@ -217,7 +217,7 @@ def _flag_lines(pull_request: PullRequest) -> Text | None:
     flag = status.attention(pull_request)
     if flag is None:
         return None
-    # Both of these are "a human has to sign this off" — the difference is
+    # Both of these are "a human has to sign this off". The difference is
     # whether that is now or later, and either way the reason is what makes the
     # mark actionable rather than mysterious.
     holds_for_a_human = flag in (theme.APPROVAL, theme.HELD)
@@ -275,9 +275,9 @@ def _threads(pull_request: PullRequest) -> Text | None:
 def _cost_lines(pull_request: PullRequest) -> Text | None:
     """What the last pass cost, for anyone deciding whether it was worth it.
 
-    Every part is conditional. Providers differ in what they report — some give
-    a price, some give tokens, some give neither — and a zero printed where a
-    provider simply said nothing would read as a measurement.
+    Every part is conditional. Providers differ in what they report: some give
+    a price, some give tokens, some give neither. A zero printed where a
+    provider said nothing would read as a measurement.
     """
     cost = pull_request.cost
     if cost is None:
@@ -327,7 +327,7 @@ def detail_text(
     """One open pull request, in three announced sections.
 
     What is happening to it now, what it is, and what this tool has done about
-    it — in that order, because the first is why you looked.
+    it, in that order, because the first is why you looked.
     """
     verdict = status.status_of(pull_request)
     merge = status.merge_state(pull_request)

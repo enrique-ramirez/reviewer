@@ -100,7 +100,7 @@ def callout(
 ) -> Text:
     """A paragraph with a bar down its left edge.
 
-    For the one thing on a pane that someone came to read — on History, what a
+    For the one thing on a pane that someone came to read: on History, what a
     pull request actually landed. Without it the summary is the same weight as
     the row of metadata around it, and gets skimmed past.
 

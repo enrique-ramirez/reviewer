@@ -69,8 +69,8 @@ def progress_note(status: BackfillStatus, frame: int) -> Text | None:
     if status.estimating:
         return prose.span(f"  {spinner} working out how much there is…", theme.LIVE)
     # Counts what has been *checked*, not what was new. A repository already on
-    # record files nothing, so a filed-based bar sits at 0 for the whole sweep
-    # and is indistinguishable from a hang — which is exactly how it read.
+    # record files nothing, so a bar counting what was filed sits at 0 for the
+    # whole sweep, which is indistinguishable from a hang. That is how it read.
     return prose.join(
         prose.span(f"  {spinner} filling history — {status.scanned:,}", theme.LIVE),
         prose.span(f" of about {status.total:,}", theme.MUTED) if status.total else None,

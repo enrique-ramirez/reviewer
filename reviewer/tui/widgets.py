@@ -36,7 +36,7 @@ class SyncedTable(DataTable):
 
     Rebuilding every second would reset the selection under the reader, so the
     table is only rebuilt when the set of rows or their order changes. Otherwise
-    the cells that actually differ are written one at a time — which is what lets
+    the cells that actually differ are written one at a time, which is what lets
     a status turning into "reviewing" appear without the board flickering.
     """
 
@@ -141,7 +141,7 @@ class ActionBar(Horizontal):
 
     Fixed slots rather than a list built per record, so a button does not shift
     sideways as the cursor moves down a table. Two on the left is enough for
-    everything offered so far — read what was said, and write what was not.
+    everything offered so far: read what was said, and write what was not.
     """
 
     #: Left-hand slots, in order. Anything past these is dropped rather than
@@ -150,9 +150,9 @@ class ActionBar(Horizontal):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        # Which action each slot is carrying. The button cannot hold it —
-        # ``Button.name`` is read-only — and its id names the slot rather than
-        # the action, which changes from row to row.
+        # Which action each slot is carrying. The button cannot hold it:
+        # ``Button.name`` is read-only. Its id names the slot rather than the
+        # action, which changes from row to row.
         self._carrying: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
@@ -225,9 +225,9 @@ def track_text(progress: Progress, frame: int) -> Text:
     eaten = int(progress.fraction * TRACK_DOTS)
     track = Text("  ")
     track.append(" " * eaten)
-    # Paused keeps its place on the track — that is the point, you can see how
-    # much of the wait you are holding — but stops chewing. A mouth still
-    # opening and closing over a number that never changes reads as a hang.
+    # Paused keeps its place on the track but stops chewing. Keeping the place
+    # is the point: you can see how much of the wait you are holding. A mouth
+    # still opening and closing over a number that never changes reads as a hang.
     track.append(theme.pac_frame(0 if progress.paused else frame), style="bold yellow")
     track.append(theme.DOT * max(0, TRACK_DOTS - eaten), style=theme.FAINT)
     track.append(theme.GHOST, style=theme.URGENT)
@@ -259,7 +259,7 @@ class PacTimer(Static):
 
     #: Width the clock reserves at the right edge of the header. Docked
     #: siblings both anchor to that edge rather than stacking, so this is
-    #: reserved by hand — asserted in the tests, since overlapping the clock is
+    #: reserved by hand. The tests assert it, since overlapping the clock is
     #: not something a glance at the screen would necessarily catch.
     CLOCK_WIDTH = 10
 

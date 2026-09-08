@@ -1,6 +1,6 @@
 """What has landed.
 
-Summary is this session only — the counterweight to automating the reviewing,
+Summary is this session only: the counterweight to automating the reviewing,
 so that changes still get read. History is the same record without the time
 limit, across every watched repository, with filters for answering questions
 about it.
@@ -29,9 +29,9 @@ AUTHOR_WIDTH = 16
 REPO_WIDTH = 18
 
 DESCRIPTION_NOTES = {
-    "title": "the author's own title — backfilled history is not summarised, "
+    "title": "the author's own title: backfilled history is not summarised, "
     "which is what keeps it free. press g to write one for this pull request",
-    "review": "taken from our own review — the summary could not be written",
+    "review": "taken from our own review, where the summary could not be written",
 }
 
 
@@ -67,7 +67,7 @@ def _cost(merge: Merge) -> Text | None:
     """What reviewing it cost, totalled over every round.
 
     Every part is conditional: providers report different things, and a zero
-    printed where one simply said nothing would read as a measurement.
+    printed where one said nothing would read as a measurement.
     """
     cost = merge.cost
     if cost is None:
@@ -85,7 +85,7 @@ def _cost(merge: Merge) -> Text | None:
 
 
 def _summary_paragraph(merge: Merge, width: int) -> Text:
-    """What the change actually did — the reason this pane exists.
+    """What the change actually did: the reason this pane exists.
 
     Given a rule of its own and a bar down its edge, because on History it is
     the one thing someone came to read and it was previously the same weight as
@@ -267,7 +267,7 @@ def merge_actions(
     return (tuple(left), OPEN_ON_GITHUB if merge.url else None)
 DATE_FILTER_ID = "date_filter"
 
-#: The label beside the date picker, with its shortcut letter underlined — the
+#: The label beside the date picker, with its shortcut letter underlined, the
 #: same convention the tab bar uses.
 DATE_LABEL = "da[u]t[/u]es"
 
@@ -378,7 +378,7 @@ class HistoryView(RecordView):
 
     @property
     def dates(self) -> Select:
-        """The date-range picker. Shows the current range as well as setting it."""
+        """The date-range picker. Shows the current range and sets it."""
         return self.query_one(f"#{DATE_FILTER_ID}", Select)
 
     @property
@@ -388,7 +388,7 @@ class HistoryView(RecordView):
 
     def show(self, context: HistoryContext) -> None:
         self._shown = context
-        # Keep the picker showing what is actually being filtered — Escape
+        # Keep the picker showing what is actually being filtered: Escape
         # clears the filters from elsewhere, and the control has to follow.
         picker = self.dates
         if picker.value != context.session.window:

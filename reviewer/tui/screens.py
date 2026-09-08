@@ -1,6 +1,6 @@
 """Keyboard-driven questions.
 
-Deliberately plain — a box of text and single keys, in a tool whose whole
+Deliberately plain: a box of text and single keys, in a tool whose whole
 interface is single keys. Each question is a pure function returning the screen
 to push, so what the user is about to be asked can be checked without a
 terminal.
@@ -77,8 +77,8 @@ def range_question() -> Ask:
     body = prose.join(
         prose.line("Fill in merge history\n", theme.HEADING),
         prose.line(
-            "Records everything merged, not only what this tool reviewed, and "
-            "makes no model calls — entries show the pull request's own title.\n",
+            "Records everything merged, not just what this tool reviewed, and "
+            "makes no model calls. Entries show the pull request's own title.\n",
             theme.MUTED,
         ),
         prose.line("How far back?\n"),
@@ -94,7 +94,7 @@ def range_question() -> Ask:
 
 def _cost_line(total: int, requests: int) -> Text:
     if total == 0:
-        return prose.line("Nothing to fetch — history is already up to date.\n")
+        return prose.line("Nothing to fetch: history is already up to date.\n")
     if total >= backfill.LARGE:
         return prose.line(
             f"That is {total:,} pull requests, a large sweep. It makes no model "
@@ -149,8 +149,8 @@ class ConversationScreen(ModalScreen[None]):
     """What was actually said on a pull request, rendered as markdown.
 
     The one place a Textual widget earns its keep over a ``Text`` value: review
-    bodies are markdown written by people and by this tool — headings, fenced
-    code, the collapsible agent block — and rendering that by hand would be
+    bodies are markdown written by people and by this tool (headings, fenced
+    code, the collapsible agent block), and rendering that by hand would be
     reimplementing a renderer that already exists.
 
     It opens straight away and fills in when the fetch lands, rather than

@@ -71,7 +71,7 @@ def owner_of(repo: str) -> str:
 #:
 #: Set by the longest thing that is legitimately silent rather than by how soon
 #: anyone would like to know. Under stream-json an event arrives per turn, not
-#: per token, so the final write-up — one turn, tens of thousands of tokens —
+#: per token, so the final write-up (one turn, tens of thousands of tokens)
 #: produces nothing at all for as long as it takes to generate. Ten minutes sits
 #: above that and still well below the point at which a person would have given
 #: up on their own.
@@ -112,8 +112,8 @@ class Activity:
         Silence, not elapsed time: a review that has run for twenty minutes and
         spoke four seconds ago is working, and one that has said nothing for
         twenty minutes is the thing you actually want to hear about. Providers
-        that do not stream never report silence, so they never look stalled —
-        which is honest, since there is nothing to go on.
+        that do not stream never report silence, so they never look stalled,
+        which is honest: there is nothing to go on.
         """
         return self.silent_seconds >= STALLED_AFTER
 
