@@ -89,9 +89,10 @@ CREATE TABLE IF NOT EXISTS pr_view (
     PRIMARY KEY (repo, pr_number)
 );
 
--- Written before a review is posted and updated after. A row in state
--- 'pending' at startup means a previous run died mid-post; the head SHA is
--- re-checked against GitHub before anything is posted again.
+-- Written before a review is posted and updated to 'done' after. A row left at
+-- 'pending' means a run died in between, so it cannot say whether GitHub got the
+-- review: the pull request's own reviews are searched for this SHA's marker
+-- before anything is posted again.
 CREATE TABLE IF NOT EXISTS post_attempts (
     repo       TEXT NOT NULL,
     pr_number  INTEGER NOT NULL,
@@ -1102,29 +1103,40 @@ class Store:
         ).fetchone()
         return int(row["description_tries"]) if row else 0
 
-    def already_posted(
+    def post_status(
         self, repo: str, pr_number: int, head_sha: str, kind: str = "review"
-    ) -> bool:
-        """Whether this exact post already completed.
+    ) -> str:
+        """``done``, ``pending``, or ``""`` where nothing was ever claimed.
 
-        Checked *before* the model is called, not just before posting. A crash
-        between "GitHub accepted the review" and "state recorded it" would
-        otherwise leave the next tick spending several minutes of model time on
-        a review it then throws away.
+        ``pending`` cannot be resolved here. It means a run died between claiming
+        the post and recording it, so whether GitHub got the review is a question
+        only GitHub can answer.
         """
         row = self.conn.execute(
             "SELECT status FROM post_attempts "
             "WHERE repo = ? AND pr_number = ? AND head_sha = ? AND kind = ?",
             (repo, pr_number, head_sha, kind),
         ).fetchone()
-        return row is not None and row["status"] == "done"
+        return str(row["status"]) if row is not None else ""
+
+    def already_posted(
+        self, repo: str, pr_number: int, head_sha: str, kind: str = "review"
+    ) -> bool:
+        """Whether this exact post is recorded as completed.
+
+        A row still at ``pending`` answers False, because this cannot tell a
+        review that never went up from one that went up and was never recorded.
+        Gating a post on this alone double-posts that second case;
+        ``Reviewer._already_posted`` is what resolves it against GitHub.
+        """
+        return self.post_status(repo, pr_number, head_sha, kind) == "done"
 
     def begin_post(self, repo: str, pr_number: int, head_sha: str, kind: str) -> bool:
-        """Claim the right to post.
+        """Record a claim on this post, and say whether it had already completed.
 
-        Returns False when this exact post already completed, which is what stops
-        a crash between "posted to GitHub" and "wrote state" from producing a
-        duplicate review on the next tick.
+        The claim itself prevents nothing: it is written before GitHub is called
+        and says nothing about whether that call landed. Only the ``done`` this
+        returns False for is evidence of anything.
         """
         row = self.conn.execute(
             "SELECT status FROM post_attempts "

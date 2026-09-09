@@ -12,8 +12,9 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from reviewer import gates, prompt, publish
+from reviewer import gates, prompt, publish, render
 from reviewer.config import REPO_DEFAULTS, RepoConfig, _deep_merge
+from reviewer.gh import GitHubError
 from reviewer.gh.graphql import ReviewThread, ThreadComment
 from reviewer.pipeline import Reviewer
 from reviewer.render import Finding
@@ -396,6 +397,96 @@ class AskingForAnotherLookAtUnchangedCode(unittest.TestCase):
     def test_a_new_push_is_not_a_repeat_and_never_was(self) -> None:
         self._post_a_review("oldsha")
         self.assertFalse(self.store.already_posted("acme/widgets", 42, "newsha"))
+
+
+class ReviewsFake:
+    """Just the one call ``_already_posted`` makes."""
+
+    def __init__(self, reviews: list[dict[str, Any]], error: Exception | None = None):
+        self.reviews = reviews
+        self.error = error
+        self.calls = 0
+
+    def list_reviews(self, owner: str, repo: str, number: int) -> list[dict[str, Any]]:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return self.reviews
+
+
+class DyingBetweenPostingAndRecordingIt(unittest.TestCase):
+    """The window a claim on its own does not cover.
+
+    ``begin_post`` is written before GitHub is called, so a run killed after the
+    review lands but before ``finish_post`` leaves the row at 'pending'. That row
+    is not evidence either way, and reading it as "not posted" puts a second copy
+    of the same review on somebody's pull request.
+    """
+
+    SHA = "deadbeefcafe1234"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.store = Store(Path(self._tmp.name))
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def _reviewer(self, rest: ReviewsFake) -> Reviewer:
+        obj = Reviewer.__new__(Reviewer)
+        obj.rest = rest  # type: ignore[attr-defined]
+        obj.cfg = repo_config()  # type: ignore[attr-defined]
+        obj.store = self.store  # type: ignore[attr-defined]
+        return obj
+
+    def _die_mid_post(self) -> None:
+        self.store.begin_post("acme/widgets", 42, self.SHA, "review")
+
+    def test_the_review_that_landed_is_found_and_not_repeated(self) -> None:
+        self._die_mid_post()
+        rest = ReviewsFake([{"body": f"{render.marker(self.SHA)}\nfindings"}])
+
+        self.assertTrue(self._reviewer(rest)._already_posted(42, self.SHA))
+        # Recorded, so the next tick answers from the database and asks nothing.
+        self.assertTrue(self.store.already_posted("acme/widgets", 42, self.SHA))
+
+    def test_the_review_that_never_landed_is_still_owed(self) -> None:
+        self._die_mid_post()
+        rest = ReviewsFake([{"body": "a human said something"}])
+
+        self.assertFalse(self._reviewer(rest)._already_posted(42, self.SHA))
+        self.assertEqual(self.store.post_status("acme/widgets", 42, self.SHA), "")
+
+    def test_a_review_of_another_sha_does_not_count_as_this_one(self) -> None:
+        self._die_mid_post()
+        rest = ReviewsFake([{"body": render.marker("0123456789abcdef")}])
+
+        self.assertFalse(self._reviewer(rest)._already_posted(42, self.SHA))
+
+    def test_an_unreachable_github_is_read_as_posted(self) -> None:
+        self._die_mid_post()
+        rest = ReviewsFake([], error=GitHubError(403, "no", "/reviews"))
+
+        self.assertTrue(self._reviewer(rest)._already_posted(42, self.SHA))
+        # Left pending: nothing was learned, so the next tick asks again.
+        self.assertEqual(
+            self.store.post_status("acme/widgets", 42, self.SHA), "pending"
+        )
+
+    def test_a_recorded_post_never_asks_github(self) -> None:
+        self.store.begin_post("acme/widgets", 42, self.SHA, "review")
+        self.store.finish_post("acme/widgets", 42, self.SHA, "review")
+        rest = ReviewsFake([])
+
+        self.assertTrue(self._reviewer(rest)._already_posted(42, self.SHA))
+        self.assertEqual(rest.calls, 0)
+
+    def test_an_unclaimed_post_never_asks_github(self) -> None:
+        rest = ReviewsFake([])
+
+        self.assertFalse(self._reviewer(rest)._already_posted(42, self.SHA))
+        self.assertEqual(rest.calls, 0)
 
 
 if __name__ == "__main__":

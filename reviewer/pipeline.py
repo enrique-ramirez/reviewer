@@ -650,7 +650,7 @@ class Reviewer:
                 if (
                     not self.force
                     and not asked_for_again
-                    and self.store.already_posted(cfg.repo, number, snapshot.head_sha)
+                    and self._already_posted(number, snapshot.head_sha)
                 ):
                     log.get().info(
                         "%s#%s: a review for %s already went out; not repeating it",
@@ -1089,6 +1089,53 @@ class Reviewer:
             spend=spend if spend is not None and spend.measured else None,
         )
 
+    def _already_posted(
+        self, number: int, head_sha: str, kind: str = "review"
+    ) -> bool:
+        """Whether a review for this SHA is already on the pull request.
+
+        The database alone cannot answer. A row left at ``pending`` means a run
+        died between posting and recording it, so the review may or may not have
+        reached GitHub; the pull request's own reviews settle it, matched on this
+        SHA's marker. Where GitHub cannot be reached the answer is "posted",
+        because a review that never went up can be asked for again by hand and a
+        second copy on someone's pull request cannot be taken back.
+        """
+        cfg = self.cfg
+        status = self.store.post_status(cfg.repo, number, head_sha, kind)
+        if status == "done":
+            return True
+        if status != "pending":
+            return False
+
+        try:
+            reviews = self.rest.list_reviews(cfg.owner, cfg.name, number)
+        except GitHubError as exc:
+            log.get().warning(
+                "%s#%s: could not check whether %s was already posted (%s); "
+                "assuming it was",
+                cfg.repo,
+                number,
+                head_sha[:8],
+                exc,
+            )
+            return True
+
+        wanted = render.marker(head_sha)
+        if any(wanted in (row.get("body") or "") for row in reviews):
+            log.get().info(
+                "%s#%s: a review for %s reached GitHub before the last run died; "
+                "recording it rather than posting a second one",
+                cfg.repo,
+                number,
+                head_sha[:8],
+            )
+            self.store.finish_post(cfg.repo, number, head_sha, kind)
+            return True
+
+        self.store.abandon_post(cfg.repo, number, head_sha, kind)
+        return False
+
     def _publish(
         self,
         *,
@@ -1146,8 +1193,11 @@ class Reviewer:
             )
             body += publish.unplaceable_section(placed.unplaceable)
 
-        claimed = self.store.begin_post(cfg.repo, number, head_sha, "review")
-        if not claimed and not self.force and not allow_repost:
+        if (
+            not self.force
+            and not allow_repost
+            and self._already_posted(number, head_sha)
+        ):
             log.get().info(
                 "%s#%s: a review for %s was already posted, not repeating it",
                 cfg.repo,
@@ -1155,6 +1205,7 @@ class Reviewer:
                 head_sha[:8],
             )
             return False
+        self.store.begin_post(cfg.repo, number, head_sha, "review")
 
         if self.dry_run:
             log.get().info(

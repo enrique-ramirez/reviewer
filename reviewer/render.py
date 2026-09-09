@@ -30,8 +30,15 @@ PROVIDER_LABEL = {
 }
 
 
-def _provider_label(provider: str) -> str:
-    return PROVIDER_LABEL.get(provider, "AI")
+def _byline(provider: str) -> str:
+    """The first line of a posted review.
+
+    A ``command`` adapter running an arbitrary binary, or a call that reported no
+    provider at all, gets no attribution rather than a guess about who wrote it.
+    """
+    name = PROVIDER_LABEL.get(provider, "")
+    attribution = f"written by {name}, " if name else ""
+    return f"🤖 **AI review** — {attribution}posted from my account."
 
 
 @dataclass
@@ -185,9 +192,8 @@ def summary_body(
 ) -> str:
     parts = [
         marker(head_sha),
-        f"🤖 **AI review** — written by {_provider_label(provider)}, posted from "
-        "my account. I read it before it went up only if it says so below; "
-        "treat it as a first pass, not a verdict.",
+        f"{_byline(provider)} I read it before it went up only if it says so "
+        "below; treat it as a first pass, not a verdict.",
         "",
         summary_text.strip(),
         "",
@@ -223,7 +229,7 @@ def approval_body(
 ) -> str:
     parts = [
         marker(head_sha),
-        f"🤖 **AI review** — written by {_provider_label(provider)}, posted from my account.",
+        _byline(provider),
         "",
         summary_text.strip() or "Looks good to me.",
     ]
