@@ -37,20 +37,10 @@ class RecordView(Vertical):
         self._records: tuple[Any, ...] = ()
 
     def compose(self) -> ComposeResult:
-        """Two columns, each owning what belongs to it.
-
-        The status line and the filters used to run the full width, under both
-        panes, which read as describing the whole screen. They describe the
-        list: how many rows there are, which page of them, what is filtering
-        them. So they live under the list, inside its column, and the divider
-        between the columns runs past them to say so.
-        """
         with Horizontal():
             with Vertical(classes="listing"):
                 yield SyncedTable(self.COLUMNS)
                 with Horizontal(classes="underbar"):
-                    # Three equal slots, so the middle one's centre is the
-                    # bar's centre and the outer two sit on its edges.
                     yield StatusBar(classes="counts")
                     yield StatusBar(classes="pager")
                     yield from self.filters()
@@ -60,11 +50,9 @@ class RecordView(Vertical):
                 yield ActionBar(classes="actions")
 
     def filters(self) -> Iterable[Any]:
-        """Controls that sit at the right-hand end of the status line."""
         return ()
 
     def overlays(self) -> Iterable[Any]:
-        """Rows below the status line, shown only while they are being used."""
         return ()
 
     @property
@@ -85,7 +73,6 @@ class RecordView(Vertical):
 
     @property
     def pager_bar(self) -> StatusBar:
-        """The middle slot. Empty on a view that does not page."""
         return self.query_one("StatusBar.pager", StatusBar)
 
     @property
@@ -136,11 +123,6 @@ class RecordView(Vertical):
     def actions(
         self, record: Any
     ) -> tuple[tuple[Action, ...], Action | None]:
-        """The buttons under the pane: things to do, and the way out.
-
-        A record with no URL offers no way out: an empty pane should not carry
-        a button that cannot work.
-        """
         if record is None or not getattr(record, "url", ""):
             return ((), None)
         return ((), OPEN_ON_GITHUB)
@@ -156,6 +138,4 @@ class RecordView(Vertical):
         raise NotImplementedError
 
     def pager_text(self) -> Text:
-        """Which page of how many. Centred, so it reads as being about the list
-        rather than as another item in the run of counts on the left."""
         return Text()

@@ -1,10 +1,3 @@
-"""What the dashboard is currently showing, as a value.
-
-Every key that changes the view returns a new ``Session`` rather than mutating
-one, so "what is on screen" is a single object the app can swap and re-render
-from, and every transition can be tested without a terminal.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -14,8 +7,6 @@ from .models import short_name
 
 ALL_REPOSITORIES = "All repositories"
 
-# Offered by the date picker on History. None first, so the default is
-# "everything" and the list reads shortest-span-last.
 WINDOWS: tuple[tuple[str, float | None], ...] = (
     ("all time", None),
     ("last 7 days", 7 * DAY),
@@ -39,7 +30,6 @@ class Session:
 
     @property
     def entries(self) -> tuple[tuple[str, str | None], ...]:
-        """The sidebar's rows: everything, then one per repository."""
         return ((ALL_REPOSITORIES, None), *((repo, repo) for repo in self.repos))
 
     @property
@@ -48,7 +38,6 @@ class Session:
 
     @property
     def scope(self) -> tuple[str, ...]:
-        """The repositories every view is showing."""
         chosen = self.chosen_repo
         return (chosen,) if chosen else self.repos
 
@@ -58,13 +47,6 @@ class Session:
 
     @property
     def scope_label(self) -> str:
-        """What the title calls what you are looking at.
-
-        Without the owner, which every repository in a run tends to share and
-        which the sidebar spells out anyway. A single-repository run says that
-        repository rather than "All repositories", because there is no "all"
-        to distinguish it from.
-        """
         chosen = self.chosen_repo
         if chosen:
             return short_name(chosen)
@@ -90,8 +72,6 @@ class Session:
         span = WINDOWS[self.window % len(WINDOWS)][1]
         return now - span if span else None
 
-    # Paging is per-repository and per-filter: keeping page 4 after narrowing
-    # would land on an empty page.
     def with_repo(self, index: int) -> "Session":
         return replace(self, repo_index=index % len(self.entries), page=0)
 

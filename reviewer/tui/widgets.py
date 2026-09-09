@@ -32,14 +32,6 @@ def signature_of(cells: Cells) -> Signature:
 
 
 class SyncedTable(DataTable):
-    """A table whose rows are updated in place, so the cursor holds still.
-
-    Rebuilding every second would reset the selection under the reader, so the
-    table is only rebuilt when the set of rows or their order changes. Otherwise
-    the cells that actually differ are written one at a time, which is what lets
-    a status turning into "reviewing" appear without the board flickering.
-    """
-
     # DataTable binds these to scrolling within itself, which swallows them
     # before the app sees them. A page here is exactly one screenful, so there
     # is nothing to scroll and "page down" can only sensibly mean the next page.
@@ -78,18 +70,12 @@ class SyncedTable(DataTable):
                 self.update_cell(key, column, cell)
 
     def refresh_cell(self, key: str, cells: Cells, index: int) -> None:
-        """Redraw one column of one row, cheaply, between syncs.
-
-        The whole row's signature is recorded alongside, or the next sync would
-        see the animated cell as stale and rewrite it a frame behind.
-        """
         if key not in self._rendered:
             return
         self._rendered[key] = signature_of(cells)
         self.update_cell(key, self._column_keys[index], cells[index])
 
     def invalidate(self) -> None:
-        """Force a rebuild on the next sync."""
         self._rendered.clear()
 
     def _rebuild(self, rows: Sequence[Rendered]) -> None:
@@ -104,8 +90,6 @@ class SyncedTable(DataTable):
 
 
 class DetailPane(VerticalScroll):
-    """The scrolling account of whichever row the cursor is on."""
-
     def __init__(self, **kwargs: Any) -> None:
         self._body = Static()
         super().__init__(self._body, **kwargs)
@@ -116,19 +100,12 @@ class DetailPane(VerticalScroll):
 
 @dataclass(frozen=True, slots=True)
 class Action:
-    """A button under the detail pane, and the key that does the same thing."""
-
     id: str
     label: str
     key: str
 
     @property
     def markup(self) -> str:
-        """The label with its shortcut letter underlined, as the tabs do it.
-
-        The first occurrence only: "Open on GitHub" underlines the O it starts
-        with, not the one in "on".
-        """
         index = self.label.lower().find(self.key.lower())
         if index < 0:
             return f"{self.label} ({self.key})"
@@ -137,15 +114,6 @@ class Action:
 
 
 class ActionBar(Horizontal):
-    """The buttons under a detail pane: things to do left, the way out right.
-
-    Fixed slots rather than a list built per record, so a button does not shift
-    sideways as the cursor moves down a table. Two on the left is enough for
-    everything offered so far: read what was said, and write what was not.
-    """
-
-    #: Left-hand slots, in order. Anything past these is dropped rather than
-    #: silently overflowing the row.
     SLOTS = ("primary", "second")
 
     def __init__(self, **kwargs: Any) -> None:
@@ -161,7 +129,6 @@ class ActionBar(Horizontal):
         yield Button("", id="action-open", compact=True, classes="action")
 
     def carried_by(self, button: Button) -> str:
-        """The id of the action a button is offering right now."""
         return self._carrying.get(button.id or "", "")
 
     def show(self, left: Sequence[Action], right: Action | None) -> None:
@@ -181,18 +148,15 @@ class ActionBar(Horizontal):
 
 
 class StatusBar(Static):
-    """The one-line footer under a view, describing what it is showing."""
+    pass
 
 
 @dataclass(frozen=True, slots=True)
 class Progress:
-    """How far through the wait between scans the reviewer is."""
-
     phase: str = ""
     remaining: float | None = None
     total: float | None = None
     paused: bool = False
-    """The countdown is held where it is and no scan will start on the timer."""
 
     @property
     def counting_down(self) -> bool:
@@ -221,13 +185,9 @@ class Progress:
 
 
 def track_text(progress: Progress, frame: int) -> Text:
-    """The wait until the next scan, as Pac-Man closing on a ghost."""
     eaten = int(progress.fraction * TRACK_DOTS)
     track = Text("  ")
     track.append(" " * eaten)
-    # Paused keeps its place on the track but stops chewing. Keeping the place
-    # is the point: you can see how much of the wait you are holding. A mouth
-    # still opening and closing over a number that never changes reads as a hang.
     track.append(theme.pac_frame(0 if progress.paused else frame), style="bold yellow")
     track.append(theme.DOT * max(0, TRACK_DOTS - eaten), style=theme.FAINT)
     track.append(theme.GHOST, style=theme.URGENT)
@@ -247,16 +207,6 @@ def phase_text(progress: Progress, running_for: float) -> Text:
 
 
 class PacTimer(Static):
-    """Purely decorative, and deliberately cheap: one line, twice a second.
-
-    While a scan is actually running it steps aside and shows the phase, because
-    that is the information that matters then.
-
-    It lives in the header, beside the clock. What it says is true of the run
-    rather than of any one tab, and it was previously wedged between the tabs
-    and the log where it read as belonging to whichever pane was above it.
-    """
-
     #: Width the clock reserves at the right edge of the header. Docked
     #: siblings both anchor to that edge rather than stacking, so this is
     #: reserved by hand. The tests assert it, since overlapping the clock is

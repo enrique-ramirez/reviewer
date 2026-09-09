@@ -1,14 +1,3 @@
-"""The repository list: what you are scoped to, and how each one is doing.
-
-It exists only when there is a choice to make. Watching one repository it would
-be a column of screen width spent naming the only repository there is.
-
-Collapsing it does not hide it. A sidebar that vanishes takes the fact that
-there *are* other repositories with it, so what is left is a rail of Pac-Man
-ghosts, one per repository, coloured the way its row would have been. You can
-still see there are three of them and that one has gone yellow.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,8 +22,6 @@ INDENT = "   "
 
 @dataclass(frozen=True, slots=True)
 class RepoStats:
-    """One sidebar row's worth of "how is this doing"."""
-
     label: str
     subtitle: str
     open_count: int = 0
@@ -67,12 +54,6 @@ def _tally(label: str, subtitle: str, rows: Sequence[PullRequest], **kwargs: boo
 def summarise(
     pull_requests: Sequence[PullRequest], session: Session
 ) -> tuple[RepoStats, ...]:
-    """One entry per sidebar row, in the order ``Session.entries`` gives them.
-
-    Counted over every watched repository rather than the scoped ones, which is
-    the whole point: the sidebar is how you see what is waiting somewhere you
-    are not looking.
-    """
     by_repo: dict[str, list[PullRequest]] = {repo: [] for repo in session.repos}
     for pull_request in pull_requests:
         by_repo.setdefault(pull_request.repo, []).append(pull_request)
@@ -91,7 +72,6 @@ def summarise(
 
 
 def _counts(stats: RepoStats) -> Text:
-    """Open, how much of it we have looked at, how much wants a human."""
     line = prose.span(f"{stats.open_count} open", theme.MUTED)
     if stats.reviewed:
         line.append(f"  {stats.reviewed} reviewed", style=theme.MUTED)
@@ -117,7 +97,6 @@ def entry_text(stats: RepoStats, *, chosen: bool, frame: int) -> Text:
 
 
 def rail_text(stats: RepoStats, *, chosen: bool, frame: int) -> Text:
-    """One cell wide: still there, still says whether anything wants you."""
     if stats.busy:
         glyph, style = theme.spinner_frame(frame), theme.LIVE
     elif stats.waiting:
@@ -131,17 +110,10 @@ def rail_text(stats: RepoStats, *, chosen: bool, frame: int) -> Text:
 
 
 class SidebarHeader(Static):
-    """The title, and the thing you click to fold the sidebar away."""
-
     class Toggled(Message):
         pass
 
     def show(self, *, collapsed: bool) -> None:
-        """One line either way: the arrow, then the title if there is room.
-
-        The word "hide" went: the arrow already says what clicking does, and
-        spending a second line on saying it again cost a repository row.
-        """
         if collapsed:
             self.update(prose.span(theme.EXPAND, theme.FAINT))
             return
@@ -157,8 +129,6 @@ class SidebarHeader(Static):
 
 
 class RepoRow(Static):
-    """One repository. Clicking it scopes every tab to that repository."""
-
     class Picked(Message):
         def __init__(self, index: int) -> None:
             super().__init__()
@@ -180,8 +150,6 @@ class RepoRow(Static):
 
 
 class RepoSidebar(Vertical):
-    """A focusable panel of clickable rows, keyboard and mouse alike."""
-
     can_focus = True
 
     BINDINGS = [

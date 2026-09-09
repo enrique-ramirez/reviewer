@@ -36,11 +36,6 @@ DESCRIPTION_NOTES = {
 
 
 def _description(merge: Merge, placeholder: str, weak_style: str) -> tuple[str, str]:
-    """The change in one line, and how confidently to present it.
-
-    A backfilled row carries the author's title rather than a summary we wrote,
-    and is shown plainly rather than dressed up as one.
-    """
     if not merge.description:
         return placeholder, theme.MUTED
     return merge.description, "" if merge.described_by_model else weak_style
@@ -48,14 +43,10 @@ def _description(merge: Merge, placeholder: str, weak_style: str) -> tuple[str, 
 
 def _contribution(merge: Merge) -> Text:
     if not merge.reviewed_by_us:
-        # Most of a backfilled history looks like this, and "0 comments over 0
-        # rounds" would imply we looked and said nothing.
         return prose.field("from us", "not reviewed by this tool", theme.MUTED)
     detail = f"{merge.our_comments} comment(s) over {merge.our_reviews} round(s)"
     if merge.our_blockers:
         detail += f", {merge.our_blockers} blocking"
-    # No colour: it merged, so however hard we pushed back at the time, nothing
-    # here asks anything of anyone now.
     return prose.join(
         prose.field("from us", detail),
         prose.field("ended on", merge.last_event) if merge.last_event else None,
@@ -64,11 +55,6 @@ def _contribution(merge: Merge) -> Text:
 
 
 def _cost(merge: Merge) -> Text | None:
-    """What reviewing it cost, totalled over every round.
-
-    Every part is conditional: providers report different things, and a zero
-    printed where one said nothing would read as a measurement.
-    """
     cost = merge.cost
     if cost is None:
         return None
@@ -85,16 +71,6 @@ def _cost(merge: Merge) -> Text | None:
 
 
 def _summary_paragraph(merge: Merge, width: int) -> Text:
-    """What the change actually did: the reason this pane exists.
-
-    Given a rule of its own and a bar down its edge, because on History it is
-    the one thing someone came to read and it was previously the same weight as
-    the metadata around it.
-
-    A backfilled row carries the author's title rather than a summary, and the
-    title is already the headline two lines above. Repeating it there dressed as
-    a summary said nothing twice; the empty state and the button say something.
-    """
     written = merge.description if merge.described_by_model else ""
     if written:
         return prose.join(
@@ -127,17 +103,10 @@ def _timings(merge: Merge) -> Text:
 
 
 def _size(merge: Merge) -> Text:
-    value = prose.churn(merge.additions, merge.deletions)
-    value.append(f" in {merge.changed_files} files", style=theme.MUTED)
-    return prose.field_text("size", value)
+    return prose.size(merge.additions, merge.deletions, merge.changed_files)
 
 
 def detail_text(merge: Merge, *, width: int = 0) -> Text:
-    """The full account of one merged pull request, for either tab.
-
-    Three sections, each announced by a rule: what it is, what it changed, and
-    what is on record about it.
-    """
     ours = "  (yours)" if merge.is_ours else ""
     return prose.join(
         prose.headline(merge.number, merge.title, prose.span(merge.repo, theme.MUTED)),
@@ -169,8 +138,6 @@ def _churn_cell(merge: Merge) -> Text:
     return Text(formatting.churn(merge.additions, merge.deletions), style=theme.MUTED)
 
 
-# --------------------------------------------------------------- this run
-
 SUMMARY_COLUMNS = (
     Column("PR", 7),
     Column("Merged", 10),
@@ -194,8 +161,6 @@ def summary_cells(merge: Merge, now: float) -> Cells:
 
 
 class SummaryView(RecordView):
-    """This run, unfiltered and unpaged: a session rarely sees more than a few."""
-
     COLUMNS = SUMMARY_COLUMNS
 
     def __init__(self, **kwargs: Any) -> None:
@@ -232,8 +197,6 @@ class SummaryView(RecordView):
         )
 
 
-# ----------------------------------------------------------------- history
-
 HISTORY_COLUMNS = (
     Column("Repo", 18),
     Column("PR", 7),
@@ -251,12 +214,6 @@ WRITE_SUMMARY = Action(id="describe", label="Generate summary", key="g")
 def merge_actions(
     merge: Merge | None,
 ) -> tuple[tuple[Action, ...], Action | None]:
-    """Buttons for a merged row: read it, write the summary, open it on GitHub.
-
-    The write button only appears where there is nothing written yet, so the
-    pane never offers to spend a model call on something already paid for. The
-    read button only appears where this tool actually said something.
-    """
     if merge is None:
         return ((), None)
     left: list[Action] = []
@@ -265,10 +222,10 @@ def merge_actions(
     if not merge.described_by_model:
         left.append(WRITE_SUMMARY)
     return (tuple(left), OPEN_ON_GITHUB if merge.url else None)
+
+
 DATE_FILTER_ID = "date_filter"
 
-#: The label beside the date picker, with its shortcut letter underlined, the
-#: same convention the tab bar uses.
 DATE_LABEL = "da[u]t[/u]es"
 
 
@@ -286,8 +243,6 @@ def history_cells(merge: Merge) -> Cells:
 
 @dataclass(frozen=True, slots=True)
 class HistoryContext:
-    """Everything the History tab needs beyond the rows themselves."""
-
     session: Session
     page: MergePage
     can_backfill: bool = False
@@ -298,9 +253,6 @@ def history_status(context: HistoryContext) -> Text:
     if context.note is not None:
         return context.note
     session, page = context.session, context.page
-    # Which repositories are in scope is not repeated here: the sidebar shows
-    # it, highlighted, and saying it twice made the busiest line on the screen
-    # carry the least new information.
     return prose.join(
         prose.span("  "),
         prose.span(f"{page.total:,} merged", theme.KEY),
@@ -318,7 +270,6 @@ def history_pager(context: HistoryContext) -> Text:
 
 
 def history_empty(context: HistoryContext) -> Text:
-    """What to say when there is nothing to show, which depends on why."""
     if context.session.narrowed:
         return prose.span(
             "Nothing matches those filters.\n\nEscape clears them.", theme.MUTED
@@ -344,8 +295,6 @@ def history_empty(context: HistoryContext) -> Text:
 
 
 class HistoryView(RecordView):
-    """Everything on record, filtered and paged."""
-
     COLUMNS = HISTORY_COLUMNS
 
     def __init__(self, **kwargs: Any) -> None:
@@ -378,25 +327,20 @@ class HistoryView(RecordView):
 
     @property
     def dates(self) -> Select:
-        """The date-range picker. Shows the current range and sets it."""
         return self.query_one(f"#{DATE_FILTER_ID}", Select)
 
     @property
     def page(self) -> MergePage:
-        """Which slice of the history is on screen, and how many there are."""
         return self._shown.page
 
     def show(self, context: HistoryContext) -> None:
         self._shown = context
-        # Keep the picker showing what is actually being filtered: Escape
-        # clears the filters from elsewhere, and the control has to follow.
         picker = self.dates
         if picker.value != context.session.window:
             picker.value = context.session.window
         super().show(context.page.merges)
 
     def update_note(self, note: Text | None) -> None:
-        """Repaint only the status bar, for the backfill spinner."""
         self._shown = replace(self._shown, note=note)
         self.redraw_status()
 

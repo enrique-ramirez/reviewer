@@ -12,7 +12,6 @@ from .models import Activity, Merge, PullRequest, ReviewCost, key_of
 from .session import Session
 
 PAGE_SIZE = 25
-"""Rows per page when the interface has not said how much room it has."""
 
 MIN_PAGE_SIZE = 5
 """Below this a page is more turning than reading, so a tiny window pages less."""
@@ -20,8 +19,6 @@ MIN_PAGE_SIZE = 5
 
 @dataclass(frozen=True, slots=True)
 class MergePage:
-    """One page of merged pull requests, and how many there were in total."""
-
     merges: tuple[Merge, ...]
     total: int
     number: int = 0
@@ -33,15 +30,8 @@ class MergePage:
 
 
 def open_pull_requests(store: Store, repos: tuple[str, ...]) -> tuple[PullRequest, ...]:
-    """Every open pull request across every watched repository, unscoped.
-
-    Unscoped on purpose: the sidebar counts what is waiting in the repositories
-    you are *not* looking at, which is most of the reason to have one.
-    """
     in_flight = store.active_reviews(list(repos))
     reviewed = store.reviewed_pull_requests(list(repos))
-    # One query for every row's most recent pass, rather than one per row: the
-    # board redraws on a timer.
     last_pass = store.latest_review_events(list(repos))
     return tuple(
         PullRequest.from_row(
@@ -57,7 +47,6 @@ def open_pull_requests(store: Store, repos: tuple[str, ...]) -> tuple[PullReques
 
 
 def merges_this_run(store: Store, session: Session) -> MergePage:
-    """What landed since the run started, unfiltered and unpaged."""
     scope = list(session.scope)
     return MergePage(
         merges=tuple(

@@ -12,10 +12,6 @@ Screen {
 #shell { height: 1fr; }
 #body { width: 1fr; }
 
-/* Wide enough for a repository name, its owner and its counts, and full
-   height, because a panel that stops halfway down reads as a stray box. */
-/* Widths count the border and both padding columns, so the usable text width
-   is three less than this. The stats line is the longest thing in here. */
 RepoSidebar {
     width: 38;
     height: 1fr;
@@ -23,15 +19,9 @@ RepoSidebar {
     background: $panel;
     border-right: solid $panel-lighten-2;
 }
-/* Focus is shown the way the tables show it, so the sidebar reads as one more
-   panel you can click into rather than a decoration. */
 RepoSidebar:focus { border-right: solid $accent; }
 
-/* Collapsed is a rail, not a disappearance: one glyph per repository, so the
-   fact that there are others survives folding the panel away. */
 RepoSidebar.collapsed { width: 6; }
-/* Collapsed, the header is just the arrow, centred so it lines up with the
-   rail of ghosts under it rather than hanging off the top. */
 RepoSidebar.collapsed SidebarHeader {
     height: 3;
     margin-bottom: 0;
@@ -51,8 +41,6 @@ SidebarHeader {
 }
 SidebarHeader:hover { background: $boost; }
 
-/* A blank line between rows: three lines of text with no gap reads as one
-   paragraph rather than three things you can point at. */
 RepoRow {
     height: 3;
     margin-bottom: 1;
@@ -72,9 +60,6 @@ TabPane {
 RecordView { height: 1fr; }
 RecordView > Horizontal { height: 1fr; }
 
-/* The two columns of a tab. The divider belongs to the column rather than to
-   the table, so it runs past the status line underneath. That is what says
-   the line is about the list and not about the whole screen. */
 .listing {
     width: 3fr;
     height: 1fr;
@@ -85,15 +70,10 @@ RecordView > Horizontal { height: 1fr; }
     height: 1fr;
 }
 
-/* The status line and the filters, on one row: counts at the left edge of the
-   list, controls at the right edge of it. */
 .underbar {
     height: 1;
     background: $panel;
 }
-/* Three equal slots. Equal is what makes the middle one's centre the bar's
-   centre. With an auto-width slot on either side it would drift with whatever
-   they happened to contain. */
 .underbar StatusBar.counts { width: 1fr; }
 .underbar StatusBar.pager  { width: 1fr; content-align: center middle; }
 .underbar #history_filters { width: 1fr; align-horizontal: right; }
@@ -135,12 +115,8 @@ StatusBar {
     border-top: solid $panel-lighten-2;
     background: $surface-darken-1;
 }
-/* Hidden rather than shrunk, so the space goes back to the table. */
 #log.hidden { display: none; }
 
-/* The History filter bar: a date picker that shows the current range. One row,
-   so it costs the table almost nothing: page size follows the height that is
-   left. */
 #history_filters {
     height: 1;
     padding: 0;
@@ -161,9 +137,6 @@ StatusBar {
     width: 14;
 }
 
-/* The buttons under a detail pane: what to do with this record on the left,
-   the way out to GitHub on the right. Compact, because a three-row button
-   under a pane reads as a dialog rather than as an affordance. */
 .actions {
     height: 1;
     padding: 0 1;
@@ -184,8 +157,6 @@ StatusBar {
     dock: right;
 }
 
-/* The review conversation: a near-full-screen reader, because the thing being
-   read is prose and threads rather than a question to answer. */
 #conversation {
     width: 88%;
     height: 88%;

@@ -62,15 +62,11 @@ class BackfillStatus:
 
 
 def progress_note(status: BackfillStatus, frame: int) -> Text | None:
-    """A line for the History status bar while a backfill is working."""
     if not status.working:
         return None
     spinner = theme.spinner_frame(frame)
     if status.estimating:
         return prose.span(f"  {spinner} working out how much there is…", theme.LIVE)
-    # Counts what has been *checked*, not what was new. A repository already on
-    # record files nothing, so a bar counting what was filed sits at 0 for the
-    # whole sweep, which is indistinguishable from a hang. That is how it read.
     return prose.join(
         prose.span(f"  {spinner} filling history — {status.scanned:,}", theme.LIVE),
         prose.span(f" of about {status.total:,}", theme.MUTED) if status.total else None,
@@ -80,7 +76,6 @@ def progress_note(status: BackfillStatus, frame: int) -> Text | None:
 
 
 def in_flight_lines(status: BackfillStatus) -> tuple[Text, ...]:
-    """What to admit to when the user asks to quit."""
     if status.estimating:
         return (prose.span("  sizing up a backfill", theme.LIVE),)
     if status.phase != "running":
@@ -100,8 +95,6 @@ def in_flight_lines(status: BackfillStatus) -> tuple[Text, ...]:
 
 @dataclass(frozen=True, slots=True)
 class SummaryStatus:
-    """Summaries being written on request, one merge at a time."""
-
     phase: str = "idle"
     current: str = ""
     pending: int = 0
@@ -134,7 +127,6 @@ class SummaryStatus:
 
 
 def summary_note(status: SummaryStatus, frame: int) -> Text | None:
-    """A line for the History status bar while a summary is being written."""
     if not status.working or not status.current:
         return None
     queued = f" · {status.pending} queued" if status.pending else ""
@@ -147,7 +139,6 @@ def summary_note(status: SummaryStatus, frame: int) -> Text | None:
 
 
 def summary_in_flight(status: SummaryStatus) -> tuple[Text, ...]:
-    """What to admit to when the user asks to quit."""
     if not status.working or not status.current:
         return ()
     queued = f"   {status.pending} more queued" if status.pending else ""

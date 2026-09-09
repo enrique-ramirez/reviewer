@@ -1,10 +1,3 @@
-"""Assembling a detail pane out of small, independent fragments.
-
-Each helper returns a fresh ``Text``; ``join`` glues them together and drops the
-ones a record did not warrant. Nothing here reads or writes shared state, so a
-pane's whole contents can be asserted on in one comparison.
-"""
-
 from __future__ import annotations
 
 import textwrap
@@ -17,7 +10,6 @@ from .theme import MUTED
 
 FIELD_WIDTH = 11
 RULE_WIDTH = 40
-"""Fallback width for a rule drawn before the pane knows how wide it is."""
 
 
 def span(value: str, style: str = "") -> Text:
@@ -55,11 +47,6 @@ def headline(number: int, title: str, subtitle: Text) -> Text:
 
 
 def rule(width: int = 0, label: str = "") -> Text:
-    """A line across the pane, with an optional name sitting on it.
-
-    Sections were previously separated by blank lines alone, which asks the
-    reader to infer the grouping from spacing. A rule states it.
-    """
     width = max(8, width or RULE_WIDTH)
     if not label:
         return join(span("─" * width, theme.RULE), Text("\n"))
@@ -73,7 +60,6 @@ def rule(width: int = 0, label: str = "") -> Text:
 
 
 def badge(label: str, style: str = theme.BADGE) -> Text:
-    """One label, drawn as something you could pick up."""
     return Text(f" {label} ", style=style)
 
 
@@ -87,7 +73,6 @@ def badges(labels: Sequence[str], style: str = theme.BADGE) -> Text:
 
 
 def churn(additions: int, deletions: int) -> Text:
-    """Added and removed, in the two colours every diff already uses."""
     whole = Text()
     whole.append(f"+{additions}", style=theme.ADDED)
     whole.append(" ")
@@ -95,18 +80,15 @@ def churn(additions: int, deletions: int) -> Text:
     return whole
 
 
+def size(additions: int, deletions: int, changed_files: int) -> Text:
+    value = churn(additions, deletions)
+    value.append(f" in {changed_files} files", style=theme.MUTED)
+    return field_text("size", value)
+
+
 def callout(
     body: str, width: int = 0, style: str = "white", bar: str = theme.KEY
 ) -> Text:
-    """A paragraph with a bar down its left edge.
-
-    For the one thing on a pane that someone came to read: on History, what a
-    pull request actually landed. Without it the summary is the same weight as
-    the row of metadata around it, and gets skimmed past.
-
-    Wrapped here rather than left to the renderer: a bar drawn once at the top
-    of a paragraph that then wraps to four lines is a bar against one of them.
-    """
     room = max(20, (width or RULE_WIDTH) - 2)
     whole = Text()
     for para in body.strip().splitlines():
@@ -117,7 +99,6 @@ def callout(
 
 
 def field_text(name: str, value: Text) -> Text:
-    """``field``, for a value that carries its own styling."""
     fragment = Text(f"{name:<{FIELD_WIDTH}}", style=MUTED)
     fragment.append_text(value)
     fragment.append("\n")

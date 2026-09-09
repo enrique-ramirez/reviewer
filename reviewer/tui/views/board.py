@@ -1,5 +1,3 @@
-"""The Dashboard tab: what is open right now, and what wants a human."""
-
 from __future__ import annotations
 
 from typing import Any, Sequence
@@ -31,7 +29,6 @@ SHA_WIDTH = 8
 def in_view(
     pull_requests: Sequence[PullRequest], session: Session
 ) -> tuple[PullRequest, ...]:
-    """The scoped, filtered, most-urgent-first order the board is read in."""
     scope = set(session.scope)
     chosen = [pr for pr in pull_requests if pr.repo in scope]
     return tuple(sorted(chosen, key=lambda pr: (status.rank(pr), -pr.number)))
@@ -55,18 +52,11 @@ def longest_running(pull_requests: Sequence[PullRequest], now: float) -> float:
 
 
 def subtitle(pull_requests: Sequence[PullRequest]) -> str:
-    """What the header adds after the title.
-
-    Not how many are open. That is on the Dashboard tab, which is the thing it
-    is true of. What is left is the part a title should carry: whether any of
-    them want you.
-    """
     flagged = sum(1 for pr in pull_requests if status.wants_you(pr))
     return f"{flagged} need you" if flagged else ""
 
 
 def work_in_flight(pull_requests: Sequence[PullRequest], now: float) -> tuple[Text, ...]:
-    """Named work under way, for the quit confirmation."""
     return tuple(
         prose.join(
             prose.span(
@@ -96,17 +86,6 @@ def _legend_text(flags: Sequence[theme.Flag], hidden: int) -> Text:
 
 
 def legend(pull_requests: Sequence[PullRequest] = (), width: int = 0) -> Text:
-    """A key to the marks that are actually on the board right now.
-
-    Two things it is not. It is not a catalogue of every mark the tool can
-    produce: explaining symbols that are not on screen crowds out the ones that
-    are. And it is not allowed to overflow. The bar is one line, so a legend
-    wider than the pane would be cut wherever the pane ends, which is how you
-    get "? needs your" and no idea what it needs.
-
-    So: only the flags in use, most urgent first, and if even those do not fit,
-    the least urgent are dropped for a count of what is missing.
-    """
     present = {flag for pr in pull_requests if (flag := status.attention(pr))}
     flags = [flag for flag in theme.FLAGS if flag in present]
     if not flags:
@@ -118,21 +97,14 @@ def legend(pull_requests: Sequence[PullRequest] = (), width: int = 0) -> Text:
         if not width or text.cell_len <= width:
             return text
         if len(shown) == 1:
-            # Narrower than a single entry. An ellipsis is the difference
-            # between a phrase that reads as finished and one that admits it
-            # was cut, which is the whole complaint this function answers.
             text.truncate(width, overflow="ellipsis")
             return text
         shown.pop()
 
 
 def live_status(pull_request: PullRequest, now: float, frame: int) -> str:
-    """The status column while work is in flight, kept inside its 16 cells."""
     activity = pull_request.activity
     label = status.status_of(pull_request).text
-    # For a call that has gone quiet the useful number is how long it has been
-    # quiet, not how long it has been running. It is the shorter of the two,
-    # which is what keeps this inside the column.
     seconds = (
         activity.silent_seconds if activity.is_stalled else activity.running_for(now)
     )
@@ -175,14 +147,6 @@ def _byline(pull_request: PullRequest) -> Text:
 
 
 def _activity_line(pull_request: PullRequest, now: float, frame: int) -> Text | None:
-    """The live line: how long, and (when they differ) why it is that long.
-
-    A bare elapsed time is what made a slept-through review indistinguishable
-    from a hung one. The clock a person watches counts the hours their laptop
-    spent shut; the timeout that would rescue a stuck call does not. Showing
-    only the first number invites exactly the wrong conclusion, so where the two
-    disagree this says so.
-    """
     activity = pull_request.activity
     if activity is None:
         return None
@@ -193,8 +157,6 @@ def _activity_line(pull_request: PullRequest, now: float, frame: int) -> Text | 
         f"{theme.spinner_frame(frame)} {verb} right now · {running}", theme.LIVE
     )
 
-    # Only when it is a meaningful share of the total: a few seconds of drift
-    # between two clocks is noise, and annotating it would be worse than silent.
     slept = activity.slept_seconds
     if slept >= 60:
         line.append(
@@ -217,9 +179,6 @@ def _flag_lines(pull_request: PullRequest) -> Text | None:
     flag = status.attention(pull_request)
     if flag is None:
         return None
-    # Both of these are "a human has to sign this off". The difference is
-    # whether that is now or later, and either way the reason is what makes the
-    # mark actionable rather than mysterious.
     holds_for_a_human = flag in (theme.APPROVAL, theme.HELD)
     reason = (
         prose.line(f"   {pull_request.needs_human_reason}", flag.style)
@@ -267,18 +226,11 @@ def _threads(pull_request: PullRequest) -> Text | None:
         parts.append(f"{pull_request.threads_awaiting_us} awaiting our reply")
     if pull_request.capped_threads:
         parts.append(f"{pull_request.capped_threads} parked")
-    # A parked thread is waiting on a human to settle it.
     style = theme.NEEDS_YOU if pull_request.capped_threads else ""
     return prose.field("threads", ", ".join(parts), style)
 
 
 def _cost_lines(pull_request: PullRequest) -> Text | None:
-    """What the last pass cost, for anyone deciding whether it was worth it.
-
-    Every part is conditional. Providers differ in what they report: some give
-    a price, some give tokens, some give neither. A zero printed where a
-    provider said nothing would read as a measurement.
-    """
     cost = pull_request.cost
     if cost is None:
         return None
@@ -316,19 +268,14 @@ def _last_pass(pull_request: PullRequest) -> Text | None:
 
 
 def _size(pull_request: PullRequest) -> Text:
-    value = prose.churn(pull_request.additions, pull_request.deletions)
-    value.append(f" in {pull_request.changed_files} files", style=theme.MUTED)
-    return prose.field_text("size", value)
+    return prose.size(
+        pull_request.additions, pull_request.deletions, pull_request.changed_files
+    )
 
 
 def detail_text(
     pull_request: PullRequest, now: float, frame: int, *, width: int = 0
 ) -> Text:
-    """One open pull request, in three announced sections.
-
-    What is happening to it now, what it is, and what this tool has done about
-    it, in that order, because the first is why you looked.
-    """
     verdict = status.status_of(pull_request)
     merge = status.merge_state(pull_request)
     ci = status.ci_state(pull_request)
@@ -364,7 +311,6 @@ def detail_text(
 def board_actions(
     pull_request: PullRequest | None,
 ) -> tuple[tuple[Action, ...], Action | None]:
-    """Reading the review is offered wherever there is one to read."""
     if pull_request is None:
         return ((), None)
     worth_reading = pull_request.reviewed_by_us or pull_request.open_threads

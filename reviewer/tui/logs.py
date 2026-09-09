@@ -1,10 +1,3 @@
-"""Carrying log records from the reviewer thread to the event loop.
-
-Textual widgets may only be touched from its own loop, so records queue here and
-the app drains them on a timer. Bounded, so a run left open overnight cannot
-grow without limit.
-"""
-
 from __future__ import annotations
 
 import logging

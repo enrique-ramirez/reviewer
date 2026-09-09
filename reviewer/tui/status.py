@@ -1,5 +1,3 @@
-"""What a pull request's state means, derived from the row and nothing else."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -43,12 +41,10 @@ def merge_state(pull_request: PullRequest) -> Status:
 def ci_state(pull_request: PullRequest) -> Status:
     state = pull_request.ci_state
     text = "not visible to this token" if state == "unknown" else state
-    # A pending build is waiting, not asking anything of you.
     return Status(text, CI_STYLES.get(state, PENDING))
 
 
 def peer_reviews(pull_request: PullRequest) -> tuple[Review, ...]:
-    """Everyone's review except our own."""
     ours = pull_request.author.lower() if pull_request.is_ours else ""
     return tuple(
         review
@@ -58,17 +54,11 @@ def peer_reviews(pull_request: PullRequest) -> tuple[Review, ...]:
 
 
 def attention(pull_request: PullRequest) -> Flag | None:
-    """Why this pull request wants a human, most urgent first."""
     ours_and_approved = pull_request.is_ours and pull_request.is_approved
 
     if pull_request.capped_threads:
         return theme.DISAGREEMENT
     if pull_request.needs_human:
-        # "Held for a human" and "waiting for a human right now" are different
-        # claims. A pull request with changes requested is waiting on its
-        # author; saying it needs your approval would put it at the top of your
-        # list for something you cannot do yet. It still gets a mark, because
-        # knowing it will land on you is worth knowing early.
         if pull_request.wants_changes:
             return theme.HELD
         return theme.APPROVAL
@@ -77,8 +67,6 @@ def attention(pull_request: PullRequest) -> Flag | None:
     if ours_and_approved and pull_request.mergeable == "MERGEABLE":
         return theme.MERGEABLE
     if ours_and_approved:
-        # UNKNOWN means GitHub has not finished computing mergeability, and
-        # calling that "ready to merge" would be a guess.
         return theme.MERGE_PENDING
     if pull_request.threads_awaiting_us and not pull_request.is_ours:
         return theme.REPLIES
@@ -91,34 +79,18 @@ def rank(pull_request: PullRequest) -> int:
 
 
 def wants_you(pull_request: PullRequest) -> bool:
-    """Whether this pull request is asking you for something *now*.
-
-    Narrower than carrying a flag. A pull request held for manual approval while
-    its author still has changes to make is marked, because it is worth knowing
-    it is coming. But it is not work you can pick up, so it does not belong in
-    a count of what needs you or in the filter that shows only that.
-    """
     flag = attention(pull_request)
     return bool(flag and flag.wants_you)
 
 
 def peer_verdict(pull_request: PullRequest) -> Status:
-    """Where one of *our own* pull requests stands.
-
-    The reviewer skips these, so its own verdict says nothing. What matters is
-    whether anyone else has looked, and whether it has the approval it needs.
-    """
     states = {review.state.upper() for review in peer_reviews(pull_request)}
 
     if "CHANGES_REQUESTED" in states:
         return Status("changes req.", URGENT)
     if "APPROVED" in states:
-        # Approved, but reviewDecision is not, usually branch protection
-        # wanting a second approval.
         return Status("needs 1 more", NEEDS_YOU)
     if states:
-        # Reviewed without approving, which is what the reviewer itself does
-        # when a change is clean but the approval is held back for a human.
         return Status("needs sign-off", NEEDS_YOU)
     if pull_request.requested_reviewers:
         return Status("awaiting review", PENDING)
@@ -126,16 +98,10 @@ def peer_verdict(pull_request: PullRequest) -> Status:
 
 
 def status_of(pull_request: PullRequest) -> Status:
-    """The one-phrase answer to "where is this", live work first."""
     activity = pull_request.activity
     if activity is not None:
-        # Gone quiet rather than merely slow: the model has printed nothing for
-        # long enough that it is worth a colour. Not the same claim as "hung":
-        # this says what is observable and leaves the verdict to the reader.
         if activity.is_stalled:
             return Status("quiet", URGENT)
-        # No trailing ellipsis: the board prefixes a spinner, which says "still
-        # going" better than punctuation does.
         return Status("replying" if activity.is_replying else "reviewing", LIVE)
     if pull_request.is_draft:
         return Status("draft", PENDING)
@@ -144,8 +110,6 @@ def status_of(pull_request: PullRequest) -> Status:
     if pull_request.wants_changes:
         return Status("changes req.", URGENT)
 
-    # Before the last_action fallback, which for our own pull requests only
-    # ever says "skipped: authored by us".
     if pull_request.is_ours:
         return peer_verdict(pull_request)
 
@@ -155,14 +119,8 @@ def status_of(pull_request: PullRequest) -> Status:
     if action.startswith("APPROVE"):
         return Status("approved", SETTLED)
     if action.startswith("COMMENT"):
-        # We commented and the ball is with the author: nothing waits on this
-        # reader, which is why it is not the colour of the statuses that do.
         return Status("reviewed", DONE)
     if action.startswith("skipped"):
-        # A skip overwrites whatever the review said, so the action alone
-        # cannot tell you whether we have an opinion here: "skipped: nothing
-        # changed since last review" is the outcome of having reviewed it,
-        # which is the opposite of what it reads as. The event log knows.
         if pull_request.reviewed_by_us:
             return Status("reviewed", DONE)
         return Status("not reviewed", PENDING)
@@ -170,5 +128,4 @@ def status_of(pull_request: PullRequest) -> Status:
 
 
 def reports_last_pass(pull_request: PullRequest) -> bool:
-    """Our own pull requests are skipped by design, so saying so is noise."""
     return not (pull_request.is_ours and pull_request.last_action.startswith("skipped"))

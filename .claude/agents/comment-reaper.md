@@ -98,6 +98,12 @@ If you only deleted comments, run nothing. Confirm with `git diff HEAD` that no 
 
 If you made a rename or an extraction, run the targeted checks from the profile. **Never run the full suite**; it loads the machine and floods the context. Where the profile says part of the tree cannot be verified here, say that a change there was reviewed rather than tested.
 
+## How you write
+
+Everything you write is held to the rules you are applying: your report, and any comment or documentation you touch.
+
+Read `voice/constructions.md` and `voice/register.txt` first. The profile's *Voice* section names a persona; read `voice/personas/<name>.md` and write in it. Where that file is not in this checkout, which is the normal case on somebody else's machine, use `voice/personas/house.md` instead. Never invent a voice, and never substitute a word without rewriting the sentence: the shape is what gives an assistant away.
+
 ## How to report
 
 1. **Counts:** comments before and after, per directory, and how many fell into each verdict.

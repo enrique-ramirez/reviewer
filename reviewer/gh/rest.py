@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from typing import Any, Iterator
 
@@ -27,12 +26,30 @@ ACCEPT = "application/vnd.github+json"
 API_VERSION = "2022-11-28"
 
 
-def _run_is_newer(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
-    """Whether ``candidate`` is a later attempt than ``current``.
+def _is_rate_limited(headers: dict[str, str], detail: str) -> bool:
+    if headers.get("x-ratelimit-remaining") == "0":
+        return True
+    if "retry-after" in headers:
+        return True
+    return "secondary rate limit" in detail.lower()
 
-    Prefers ``run_attempt``, then ``run_number``, then the creation timestamp,
-    which is ISO 8601 in UTC, so a string comparison orders correctly.
-    """
+
+def _retry_after(headers: dict[str, str], default: float = 60.0) -> float:
+    if "retry-after" in headers:
+        try:
+            return max(1.0, float(headers["retry-after"]))
+        except ValueError:
+            pass
+    reset = headers.get("x-ratelimit-reset")
+    if reset:
+        try:
+            return max(1.0, float(reset) - time.time() + 1)
+        except ValueError:
+            pass
+    return default
+
+
+def _run_is_newer(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
     for key in ("run_attempt", "run_number"):
         a, b = candidate.get(key), current.get(key)
         if isinstance(a, int) and isinstance(b, int) and a != b:
@@ -121,8 +138,8 @@ class RestClient:
 
             detail = exc.read().decode("utf-8", errors="replace")[:500]
 
-            if exc.code in (403, 429) and self._is_rate_limited(resp_headers, detail):
-                wait = self._retry_after(resp_headers)
+            if exc.code in (403, 429) and _is_rate_limited(resp_headers, detail):
+                wait = _retry_after(resp_headers)
                 log.get().warning(
                     "GitHub rate limit hit; sleeping %.0fs before continuing", wait
                 )
@@ -157,29 +174,6 @@ class RestClient:
         if self._remaining < 100:
             log.get().warning("GitHub rate limit low: %s remaining", self._remaining)
 
-    @staticmethod
-    def _is_rate_limited(headers: dict[str, str], detail: str) -> bool:
-        if headers.get("x-ratelimit-remaining") == "0":
-            return True
-        if "retry-after" in headers:
-            return True
-        return "secondary rate limit" in detail.lower()
-
-    @staticmethod
-    def _retry_after(headers: dict[str, str], default: float = 60.0) -> float:
-        if "retry-after" in headers:
-            try:
-                return max(1.0, float(headers["retry-after"]))
-            except ValueError:
-                pass
-        reset = headers.get("x-ratelimit-reset")
-        if reset:
-            try:
-                return max(1.0, float(reset) - time.time() + 1)
-            except ValueError:
-                pass
-        return default
-
     # ----------------------------------------------------------- verbs
 
     def get(self, path: str, *, use_cache: bool = True, accept: str | None = None) -> Any:
@@ -205,11 +199,6 @@ class RestClient:
         return payload
 
     def paginate(self, path: str, *, per_page: int = 100, cap: int = 10) -> Iterator[Any]:
-        """Walk a paginated collection.
-
-        ``cap`` bounds the number of pages so a pathological PR cannot turn one
-        tick into thousands of requests.
-        """
         sep = "&" if "?" in path else "?"
         url = f"{path}{sep}per_page={per_page}"
         pages = 0
@@ -256,9 +245,7 @@ class RestClient:
         """Files that changed between two commits, or ``None`` if we cannot tell.
 
         Used to review only what arrived since the last round instead of the
-        whole pull request again. The three-dot form is deliberate: it diffs
-        ``head`` against the merge base, so a base branch that has moved on does
-        not show up as changes the author made.
+        whole pull request again.
 
         ``None`` means "no usable answer": a force-push that orphaned the old
         SHA, a repository we cannot reach, anything at all. Every caller treats
@@ -283,8 +270,6 @@ class RestClient:
             return None
         files = payload.get("files")
         if not isinstance(files, list):
-            # A compare with no file list is an answer we cannot read, not an
-            # empty compare. Fall back rather than review nothing.
             return None
         return [f for f in files if isinstance(f, dict)]
 

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .. import log
-from .rest import API_VERSION, USER_AGENT, GitHubError
+from .rest import API_VERSION, USER_AGENT, GitHubError, _is_rate_limited, _retry_after
 
 PR_QUERY = """
 query PR($owner: String!, $name: String!, $number: Int!) {
@@ -141,9 +141,6 @@ query Merged($owner: String!, $name: String!, $size: Int!, $cursor: String) {
 }
 """
 
-# One request, one number, so the size of a backfill can be shown before it is
-# started. Search caps its *results* at 1000 but reports the true total, which
-# is all this is for.
 COUNT_QUERY = """
 query Count($q: String!) {
   search(query: $q, type: ISSUE) { issueCount }
@@ -204,13 +201,6 @@ class CheckState:
     rollup: str | None
     contexts: list[dict[str, Any]] = field(default_factory=list)
     accessible: bool = True
-    """False when the token cannot read the check rollup.
-
-    Kept separate from "there are no checks" on purpose. An empty context list
-    means a repository with no CI, which is fine to review. An inaccessible
-    rollup means we are blind, and treating blind as green would approve pull
-    requests with failing CI.
-    """
 
 
 @dataclass
@@ -234,9 +224,6 @@ class PRSnapshot:
     latest_reviews: list[dict[str, Any]] = field(default_factory=list)
     """Every reviewer's most recent review, including plain COMMENTED ones."""
     created_at: str = ""
-    """When the pull request was opened, ISO 8601. Drives "how long has this
-    been sitting there", which is about the PR and not about our review of
-    it."""
     mergeable: str = "UNKNOWN"
     """MERGEABLE | CONFLICTING | UNKNOWN. UNKNOWN means GitHub has not finished
     computing it yet, which is common right after a push. It is not a synonym
@@ -271,14 +258,6 @@ class GraphQLClient:
     def _execute(
         self, query: str, variables: dict[str, Any]
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Run a query, returning ``(data, errors)``.
-
-        GitHub's GraphQL API routinely answers with *partial* data: a field the
-        token cannot read comes back null with an error beside it, while the rest
-        of the response is complete and correct. Raising on any error throws away
-        a usable response over one inaccessible field, so errors are returned for
-        the caller to interpret and only a genuinely empty response raises.
-        """
         payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
         req = urllib.request.Request(
             self.url,
@@ -295,10 +274,12 @@ class GraphQLClient:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
+            resp_headers = {k.lower(): v for k, v in exc.headers.items()}
             detail = exc.read().decode("utf-8", errors="replace")[:500]
-            if exc.code in (403, 429):
-                log.get().warning("GraphQL rate limited, sleeping 60s")
-                time.sleep(60)
+            if exc.code in (403, 429) and _is_rate_limited(resp_headers, detail):
+                wait = _retry_after(resp_headers)
+                log.get().warning("GraphQL rate limited, sleeping %.0fs", wait)
+                time.sleep(wait)
                 return self._execute(query, variables)
             raise GitHubError(exc.code, detail, self.url) from exc
         except urllib.error.URLError as exc:
@@ -315,7 +296,6 @@ class GraphQLClient:
 
     @staticmethod
     def _errored_fields(errors: list[dict[str, Any]]) -> set[str]:
-        """Field names mentioned in error paths, e.g. ``statusCheckRollup``."""
         fields: set[str] = set()
         for error in errors:
             for part in error.get("path") or []:
@@ -444,12 +424,6 @@ class GraphQLClient:
         )
 
     def merged_count(self, owner: str, name: str, since_date: str | None) -> int | None:
-        """How many merged pull requests a backfill would cover.
-
-        ``since_date`` is ``YYYY-MM-DD`` or None for everything. Returns None if
-        the count could not be had. A backfill can still run without it; it
-        just cannot say up front how big it will be.
-        """
         query = f"repo:{owner}/{name} is:pr is:merged"
         if since_date:
             query += f" merged:>={since_date}"
@@ -464,10 +438,6 @@ class GraphQLClient:
     def merged_page(
         self, owner: str, name: str, cursor: str | None, size: int = 100
     ) -> tuple[list[dict[str, Any]], str | None]:
-        """One page of merged pull requests, newest activity first.
-
-        Returns ``(rows, next_cursor)``; a null cursor means the last page.
-        """
         data, _ = self._execute(
             MERGED_QUERY,
             {"owner": owner, "name": name, "size": size, "cursor": cursor},

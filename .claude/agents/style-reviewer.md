@@ -83,6 +83,12 @@ Where the profile says a part of the tree cannot be verified here, a change to i
 
 A comments-only or documentation-only change needs no test run at all. If you believe one does, you have changed code you should not have.
 
+## How you write
+
+Everything you write is held to the rules you are applying: your report, and any comment or documentation you touch.
+
+Read `voice/constructions.md` and `voice/register.txt` first. The profile's *Voice* section names a persona; read `voice/personas/<name>.md` and write in it. Where that file is not in this checkout, which is the normal case on somebody else's machine, use `voice/personas/house.md` instead. Never invent a voice, and never substitute a word without rewriting the sentence: the shape is what gives an assistant away.
+
 ## How to report
 
 Lead with what you changed and what you left. For anything you did not fix, say why in one sentence. Be concrete: file and line, the rule it breaks, and the fix. Do not pad the report, and do not restate rules the code already follows.

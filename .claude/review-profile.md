@@ -58,8 +58,9 @@ Anything that reaches GitHub or starts a coding-agent CLI. The suite fakes both.
 
 ## Voice
 
-- Documentation and comments: `house`
-- Text posted under a person's name: `enrique`, and it is `personality/` that carries it into a review
+`enrique`, both for prose already in this repository and for anything the agents write into it, including their reports. Where that persona file is not in the checkout, which is the normal case on somebody else's machine, `house`.
+
+The reviews this tool posts are governed separately, by `personality/`, which loads the same persona.
 
 ## Product decisions
 

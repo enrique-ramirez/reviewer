@@ -33,11 +33,6 @@ def _epoch(row: Row, key: str) -> float | None:
 
 
 def _seconds(row: Row, key: str) -> float:
-    """A duration from the database, defaulting to zero rather than to None.
-
-    A missing count means "nothing to report" everywhere this is used, and zero
-    says that without every caller having to check.
-    """
     value = row.get(key)
     try:
         return max(0.0, float(value)) if value else 0.0
@@ -57,7 +52,6 @@ def key_of(row: Row) -> str:
 
 
 def short_name(repo: str) -> str:
-    """The repository without its owner, which every row shares anyway."""
     _, _, name = repo.partition("/")
     return name or repo
 
@@ -88,13 +82,9 @@ class Activity:
 
     phase: str
     started_at: float | None = None
-    #: When the call last checked in. None from a build that did not report one.
     heartbeat_at: float | None = None
-    #: How much of the elapsed time the machine spent asleep.
     slept_seconds: float = 0.0
-    #: How long the model has gone without printing anything, awake seconds.
     silent_seconds: float = 0.0
-    #: What it was last seen doing, when the provider streams enough to say.
     note: str = ""
 
     @property
@@ -102,7 +92,6 @@ class Activity:
         return self.phase == "replying"
 
     def running_for(self, now: float) -> float:
-        """Seconds spent so far. Zero when an older build recorded no start."""
         return max(0.0, now - self.started_at) if self.started_at else 0.0
 
     @property
@@ -150,13 +139,6 @@ def _reviews(row: Row) -> tuple[Review, ...]:
 
 @dataclass(frozen=True, slots=True)
 class ReviewCost:
-    """What the last pass over a pull request cost, as recorded at the time.
-
-    Every field is optional because providers differ in what they report and
-    some report nothing at all. A round that only knows how long it took still
-    has something worth saying.
-    """
-
     calls: int = 0
     seconds: float = 0.0
     input_tokens: int = 0
@@ -172,19 +154,16 @@ class ReviewCost:
 
     @property
     def tokens(self) -> int:
-        """Everything the model read and wrote, cache included."""
         return self.input_tokens + self.output_tokens + self.cached_tokens
 
     @property
     def label(self) -> str:
-        """Which model did it, in as few words as carry meaning."""
         if self.model and self.provider:
             return f"{self.provider} · {self.model}"
         return self.model or self.provider
 
     @classmethod
     def from_merge(cls, row: Row) -> "ReviewCost | None":
-        """The same figures off a merged row, where they are lifetime totals."""
         cost = cls(
             seconds=float(row.get("review_seconds") or 0.0),
             input_tokens=_count(row, "review_input_tokens"),
@@ -214,8 +193,6 @@ class ReviewCost:
 
 @dataclass(frozen=True, slots=True)
 class PullRequest:
-    """One open pull request, as the board knows it."""
-
     repo: str
     number: int
     title: str
@@ -242,13 +219,10 @@ class PullRequest:
     needs_human: bool
     needs_human_reason: str
     our_review_state: str
-    """The state of our own most recent review, or "" if we never posted one."""
     last_action: str
     activity: Activity | None = None
     reviewed_by_us: bool = False
-    """Whether we have ever posted a review on it, from the event log."""
     cost: ReviewCost | None = None
-    """What the most recent pass cost. None when nothing was measured."""
 
     @property
     def key(self) -> str:
@@ -256,14 +230,6 @@ class PullRequest:
 
     @property
     def is_approved(self) -> bool:
-        """Whether this pull request has the approval it needs.
-
-        GitHub's own ``reviewDecision`` answers this only on repositories that
-        require a review to merge. Everywhere else it is null however many
-        approvals a pull request has, so falling back to our own last review is
-        the difference between the board saying "approved" and the board saying
-        "reviewed" about a pull request we approved hours ago.
-        """
         if self.review_decision:
             return self.review_decision == "APPROVED"
         return self.our_review_state == "APPROVED"
@@ -319,8 +285,6 @@ class PullRequest:
 
 @dataclass(frozen=True, slots=True)
 class Merge:
-    """One pull request that landed, as the Summary and History tabs know it."""
-
     repo: str
     number: int
     title: str
@@ -343,7 +307,6 @@ class Merge:
     description: str
     description_source: str
     cost: ReviewCost | None = None
-    """What reviewing it cost, totalled. None when we never reviewed it."""
 
     @property
     def key(self) -> str:
@@ -355,7 +318,6 @@ class Merge:
 
     @property
     def landed_at(self) -> float:
-        """When it merged, falling back to when we noticed."""
         return self.merged_at or self.recorded_at or 0.0
 
     @property
