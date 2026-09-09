@@ -43,11 +43,6 @@ def ci_status(snapshot: PRSnapshot, cfg: RepoConfig) -> tuple[str, list[str]]:
     The rollup covers check runs and commit statuses. Branch-protection rules
     (including "an approving review is required") are not check runs and never
     appear here, so waiting on CI never means waiting on ourselves.
-
-    ``unknown`` means the token cannot read the rollup at all. That is
-    deliberately not folded into ``green``: an empty context list means a
-    repository without CI, which is fine to review, while an unreadable rollup
-    means we would be approving blind.
     """
     gates = cfg.gates
 
@@ -102,8 +97,6 @@ def evaluate(
     gates = cfg.gates
     identity = cfg.identity
 
-    # --- unconditional skips -------------------------------------------------
-
     if gates.get("skip_drafts", True) and snapshot.is_draft:
         return _skip("draft")
 
@@ -125,7 +118,7 @@ def evaluate(
     if bases and snapshot.base_ref not in bases:
         return _skip(f"base branch {snapshot.base_ref} is out of scope")
 
-    # --- an explicit re-review request outranks the rest ---------------------
+    # An explicit re-review request outranks the rest.
     #
     # GitHub removes us from the requested-reviewer list when we submit a
     # review, and puts us back when someone clicks "Re-request review". Standing
@@ -143,8 +136,6 @@ def evaluate(
         ):
             return _skip("already approved by someone else")
 
-    # --- CI -----------------------------------------------------------------
-
     if gates.get("require_ci_green", True):
         status, detail = ci_status(snapshot, cfg)
         if status == "unknown":
@@ -158,8 +149,6 @@ def evaluate(
         if status == "pending":
             return _skip(f"CI still running: {', '.join(detail[:4])}")
 
-    # --- has anything changed since last time? ------------------------------
-
     already_reviewed_this_sha = (
         pr_state.last_reviewed_head_sha == snapshot.head_sha and snapshot.head_sha
     )
@@ -167,9 +156,6 @@ def evaluate(
     if explicitly_requested:
         return _go("re-review requested", "review_requested")
 
-    # A pull request that has gone round this many times is not going to be
-    # settled by another review. Asking for one explicitly still works. The
-    # check sits below that on purpose.
     max_rounds = (cfg.review.get("rounds") or {}).get("max_rounds")
     if max_rounds is not None and pr_state.review_round >= int(max_rounds):
         return _skip(

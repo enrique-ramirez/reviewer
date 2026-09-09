@@ -35,8 +35,6 @@ from . import clock, log, providers
 
 FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
-# Anything in this list is stripped from the child environment. The token is the
-# one that matters; the rest is hygiene.
 SENSITIVE_ENV = ("GITHUB_TOKEN", "GH_TOKEN", "GITHUB_API_URL", "GITHUB_GRAPHQL_URL")
 
 
@@ -74,12 +72,7 @@ def _forget(proc: subprocess.Popen) -> None:
 
 
 def stop_process(proc: subprocess.Popen, grace: float = 5.0) -> None:
-    """End one model call, and anything it started.
-
-    Signals the process group rather than the process: these CLIs run children
-    of their own, and terminating only the parent would leave those behind,
-    which is exactly the problem this exists to solve.
-    """
+    """End one model call, and anything it started."""
     if proc.poll() is not None:
         return
     try:
@@ -486,11 +479,6 @@ def run(
             _forget(proc)
         duration = deadline.awake_elapsed()
 
-        # Drained here rather than inside the failure branch below, and whatever
-        # the outcome. A call cancelled a moment before it would have exited on
-        # its own reaches this line with a zero status, and a mark left behind
-        # by that would be read by the *next* call on the same pull request,
-        # reporting some unrelated failure as something the user asked for.
         cancelled_by_hand = bool(label) and was_cancelled(label)
 
         if proc.returncode != 0:
@@ -503,8 +491,6 @@ def run(
             detail = (stderr or stdout or "").strip()[:600]
             raise ModelError(f"{adapter.name} exited {proc.returncode}: {detail}")
 
-        # Inside the scratch dir still: some providers write their answer to a
-        # file in it, which is gone as soon as this block ends.
         try:
             reply = adapter.read(call, stdout or "")
         except providers.ProviderError as exc:

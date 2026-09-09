@@ -29,7 +29,7 @@ from typing import Any, Iterable
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
 
 # Files whose content rarely changes a review's conclusion get dropped first
-# when a PR is over budget. Higher score = kept longer.
+# when a PR is over budget.
 _SOURCE_SUFFIXES = (
     ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rb",
     ".rs", ".java", ".kt", ".swift", ".php", ".cs", ".scala", ".vue", ".svelte",
@@ -88,9 +88,6 @@ class DiffBundle:
         return any(f.tier != "excluded" for f in self.files + self.summarized)
 
 
-# ---------------------------------------------------------------- parsing
-
-
 def parse_hunks(patch: str) -> list[Hunk]:
     hunks: list[Hunk] = []
     current: Hunk | None = None
@@ -113,8 +110,7 @@ def parse_hunks(patch: str) -> list[Hunk]:
 def commentable_lines(patch: str | None) -> dict[str, set[int]]:
     """Line numbers GitHub will accept a comment on, per side.
 
-    ``RIGHT`` covers added and context lines; ``LEFT`` covers removed and context
-    lines. Computed from the untrimmed patch, so trimming context for the prompt
+    Computed from the untrimmed patch, so trimming context for the prompt
     can only ever shrink what the model sees relative to what is valid.
     """
     valid: dict[str, set[int]] = {"RIGHT": set(), "LEFT": set()}
@@ -144,7 +140,7 @@ def commentable_lines(patch: str | None) -> dict[str, set[int]]:
 def trim_context(patch: str, keep: int) -> str:
     """Re-emit a patch keeping at most ``keep`` context lines around each change.
 
-    Hunk headers are recomputed so the result stays a valid unified diff — the
+    Hunk headers are recomputed so the result stays a valid unified diff. The
     model reads it as a diff, and a mangled header would quietly mislead it about
     which line is which.
     """
@@ -227,7 +223,7 @@ def truncate_patch(patch: str, max_lines: int) -> tuple[str, bool]:
 
 
 def hunk_summary(patch: str) -> str:
-    """Hunk headers only — enough to say where a file changed, not what to."""
+    """Hunk headers only: enough to say where a file changed, not what to."""
     headers = [h.header for h in parse_hunks(patch)]
     if not headers:
         return "(no textual diff)"
@@ -235,9 +231,6 @@ def hunk_summary(patch: str) -> str:
     if len(headers) > len(shown):
         shown.append(f"... and {len(headers) - len(shown)} more hunks")
     return "\n".join(shown)
-
-
-# ------------------------------------------------------------ compression
 
 
 def _matches_any(path: str, patterns: list[str]) -> bool:

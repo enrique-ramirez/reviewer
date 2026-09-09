@@ -72,13 +72,7 @@ def build_prompt(
     review_summary: str = "",
     files: list[str] | None = None,
 ) -> str:
-    """Assemble the user prompt.
-
-    Everything drawn from GitHub is wrapped in a tag and introduced as material
-    written by other people. The same rule the reviewer follows applies here:
-    a pull request must not be able to talk its way into changing what this
-    tool does with it.
-    """
+    """Assemble the user prompt."""
     sections = [f"## Pull request\n\n{_pull_facts(repo, pull)}"]
 
     body = (pull.get("body") or "").strip()
@@ -123,11 +117,7 @@ def describe(
     review_summary: str = "",
     files: list[str] | None = None,
 ) -> str:
-    """Ask the model for the one-liner. Returns "" if it could not be had.
-
-    Never raises: a failed summary must not take down the tick that noticed the
-    merge, and the merge itself is already recorded by the time this runs.
-    """
+    """Ask the model for the one-liner. Returns "" if it could not be had."""
     prompt = build_prompt(repo, pull, review_summary=review_summary, files=files)
     try:
         result = model.run(cfg, system_prompt=SYSTEM, user_prompt=prompt)
@@ -196,8 +186,6 @@ class Runner:
         self._stop = threading.Event()
         self._state: dict[str, Any] = {"phase": "idle"}
 
-    # ------------------------------------------------------------- reading
-
     def status(self) -> dict[str, Any]:
         with self._lock:
             state = dict(self._state)
@@ -211,8 +199,6 @@ class Runner:
     def _set(self, **fields: Any) -> None:
         with self._lock:
             self._state.update(fields)
-
-    # ------------------------------------------------------------- driving
 
     def request(self, repo: str, number: int) -> bool:
         """Ask for one summary. False if there is nothing to be done.
@@ -251,8 +237,6 @@ class Runner:
             with self._lock:
                 self._state = {"phase": "idle"}
                 self._seen.clear()
-
-    # -------------------------------------------------------------- worker
 
     def _next(self) -> tuple[str, int] | None:
         with self._lock:

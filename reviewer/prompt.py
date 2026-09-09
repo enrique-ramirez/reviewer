@@ -131,14 +131,7 @@ def build_system(
 
 
 def _settled_block(threads: list[ReviewThread], identity: str | None) -> str:
-    """Points we already made on this pull request and that are now closed.
-
-    Without this the reviewer walks into round nine believing it has never
-    spoken. It re-reads the same code with fresh eyes, finds another two or
-    three reasonable things, and the author gets a new wall of comments for
-    work they already did. One line per settled point is enough to stop that,
-    and it costs a fraction of what the diff costs.
-    """
+    """Points we already made on this pull request and that are now closed."""
     settled = [t for t in threads if t.is_resolved and t.is_ours(identity)]
     if not settled:
         return ""

@@ -36,9 +36,7 @@ from .state import Store
 MAX_BODY_CHARS = 4000
 
 #: How many other people's submitted reviews to render in full. Ours are never
-#: dropped, because they are what this screen exists for. A busy repository with three
-#: review bots can carry thirty of them, and a reader scrolling for ours through
-#: all of that is back to using the browser.
+#: dropped.
 MAX_OTHER_REVIEWS = 8
 
 
@@ -191,8 +189,6 @@ class Runner:
         self._done: dict[tuple[str, int], Conversation] = {}
         self._busy: set[tuple[str, int]] = set()
 
-    # ------------------------------------------------------------- reading
-
     def result(self, repo: str, number: int) -> Conversation | None:
         """What was fetched, or None while it is still being asked for."""
         with self._lock:
@@ -204,8 +200,6 @@ class Runner:
 
     def knows(self, repo: str) -> bool:
         return repo in self.repos
-
-    # ------------------------------------------------------------- driving
 
     def request(self, repo: str, number: int, *, refresh: bool = False) -> bool:
         """Ask for one conversation. False when there is nothing to do."""
@@ -226,8 +220,6 @@ class Runner:
     def forget(self, repo: str, number: int) -> None:
         with self._lock:
             self._done.pop((repo, number), None)
-
-    # -------------------------------------------------------------- worker
 
     def _work(self, repo: str, number: int) -> None:
         cfg = self.repos[repo]

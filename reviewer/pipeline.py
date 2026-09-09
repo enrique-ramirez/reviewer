@@ -121,8 +121,6 @@ class Reviewer:
         self._repo_context: dict[str, str] | None = None
         self._repo_context_loaded = False
 
-    # ------------------------------------------------------------------ tick
-
     def tick(
         self,
         *,
@@ -175,10 +173,6 @@ class Reviewer:
             self.store.forget_closed(self.cfg.repo, numbers + unresolved)
 
         # Phase 1: a fast scan that populates the board before any model call.
-        # Costs one GraphQL request per pull request and no model time, so the
-        # interface has a complete picture within seconds of starting rather
-        # than after a full review cycle. The snapshots are reused below, so
-        # this adds no API calls overall.
         snapshots: dict[int, PRSnapshot] = {}
         for index, number in enumerate(numbers, start=1):
             self.status_cb(f"scanning {index}/{len(numbers)} — #{number}")
@@ -248,8 +242,6 @@ class Reviewer:
 
         return result
 
-    # ------------------------------------------------------------- merges
-
     def _record_merges(self, open_numbers: list[int]) -> list[int]:
         """File pull requests that left the open list having been merged.
 
@@ -257,24 +249,11 @@ class Reviewer:
         count. A pull request we commented on or requested changes on is one we
         have an opinion about, and where it ended up is worth knowing.
 
-        Our own are here because the reviewer never reviews them: ``skip_own_prs``
-        turns them away before a model call, so nothing about them ever reaches
-        ``review_events``, and a filter that asked only "did we review this" left
-        everything its owner shipped out of both Summary and History. What landed
-        is the one thing the tabs exist to say, and one's own work is not the part
-        to leave out of it.
-
-        That filter is also what keeps this cheap. A pull request nobody asked us
-        about and nobody here wrote costs nothing when it closes; only the ones we
-        touched buy a request, and only once each.
-
         Returns the numbers whose fate could not be established, for the caller
         to keep on the board so the next tick can try again.
         """
         cfg = self.cfg
         vanished = sorted(set(self.store.board_numbers(cfg.repo)) - set(open_numbers))
-        # Read before ``forget_closed`` prunes the board, which is the last
-        # place a merged pull request of ours is still known to be ours.
         ours = self.store.our_board_numbers(cfg.repo)
         unresolved: list[int] = []
         for number in vanished:
@@ -443,19 +422,8 @@ class Reviewer:
             return []
         return [f.get("filename", "") for f in payload if isinstance(f, dict)]
 
-    # -------------------------------------------------------------- one PR
-
     def _backfill_checks(self, snapshot: PRSnapshot) -> None:
         """Fill in CI state from REST when the GraphQL rollup is unreadable.
-
-        Fine-grained tokens without the Checks permission are refused
-        ``statusCheckRollup``. Two REST endpoints can stand in, tried in order of
-        how much they cover:
-
-        * ``/check-runs``: the same data as the rollup. Also needs Checks, so it
-          usually fails alongside it, but costs one request to find out.
-        * ``/status``: legacy commit statuses. Covers integrations that post
-          statuses; does *not* cover GitHub Actions check runs.
 
         A source that returns zero entries is treated as telling us nothing, not
         as telling us everything passed. Staying blind is the safe answer.
@@ -536,13 +504,7 @@ class Reviewer:
                 )
 
     def record_board(self, snapshot: PRSnapshot, action: str | None = None) -> None:
-        """Write one pull request's row for the interface.
-
-        Called before gating so that skipped pull requests still appear on the
-        board, including your own, which the reviewer never reviews. Without
-        this the interface could not answer "is my PR ready to merge", because
-        the reviewer deliberately ignores those.
-        """
+        """Write one pull request's row for the interface."""
         cfg = self.cfg
         identity = (cfg.identity or "").lower()
         threads = [t for t in snapshot.threads if not t.is_resolved]
@@ -681,20 +643,10 @@ class Reviewer:
                     self.store.record_comment_scan(cfg.repo, number, newest_comment_id)
                     return True
 
-                # An explicit re-review request is a person asking for another
-                # look at code that has not changed, which is exactly what the
-                # guard below exists to prevent. Theirs is the deciding vote:
-                # without this, a pull request whose comments are all resolved
-                # but which never got an approval can never get one, because
-                # every re-request is refused for the same SHA it is about.
                 # GitHub drops us from the requested-reviewer list the moment we
-                # submit, so this cannot loop.
+                # submit a review, so honouring a re-review request here cannot loop.
                 asked_for_again = decision.trigger == "review_requested"
 
-                # Cheap guard before the expensive part: if a review for this
-                # exact commit already went out, do not pay for another one.
-                # Catches the crash-after-posting case, where the gate above
-                # cannot know.
                 if (
                     not self.force
                     and not asked_for_again
@@ -726,8 +678,6 @@ class Reviewer:
             return posted
         finally:
             self.store.end_active(cfg.repo, number)
-
-    # ------------------------------------------------------------- helpers
 
     def _discussion(self, number: int) -> tuple[list[dict[str, Any]], int | None]:
         cfg = self.cfg
@@ -865,8 +815,6 @@ class Reviewer:
                     f"{self.cfg.repo}#{snapshot.number} — a thread went back and "
                     "forth too many times and is parked for a human.",
                 )
-
-    # -------------------------------------------------------- the main pass
 
     def _files_for_review(
         self,
@@ -1182,8 +1130,9 @@ class Reviewer:
             note = "CI status not verified: this review did not check whether the build passes"
             coverage = f"{coverage}. {note}" if coverage else note
 
+        provider = spend.provider if spend is not None else ""
         if event == publish.EVENT_APPROVE and not findings:
-            body = render.approval_body(head_sha, summary_text, coverage)
+            body = render.approval_body(head_sha, summary_text, coverage, provider)
         else:
             body = render.summary_body(
                 head_sha=head_sha,
@@ -1193,6 +1142,7 @@ class Reviewer:
                 coverage_note=coverage,
                 invite_wave_off=invite,
                 manual_reason=manual_reason,
+                provider=provider,
             )
             body += publish.unplaceable_section(placed.unplaceable)
 

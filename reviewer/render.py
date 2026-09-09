@@ -13,8 +13,6 @@ from typing import Any
 
 MARKER_PREFIX = "<!-- blinky"
 
-#: What the marker used to be. Comments already posted on live pull requests
-#: carry it, and they are still ours — a rename must not orphan them.
 LEGACY_MARKER_PREFIXES = ("<!-- pr-reviewer",)
 
 SEVERITY_ORDER = {"blocker": 0, "correctness": 1, "nit": 2, "note": 3}
@@ -24,6 +22,16 @@ SEVERITY_LABEL = {
     "nit": "Nit",
     "note": "Note",
 }
+
+PROVIDER_LABEL = {
+    "claude": "Claude",
+    "codex": "Codex",
+    "gemini": "Gemini",
+}
+
+
+def _provider_label(provider: str) -> str:
+    return PROVIDER_LABEL.get(provider, "AI")
 
 
 @dataclass
@@ -173,12 +181,13 @@ def summary_body(
     invite_wave_off: bool,
     manual_reason: str = "",
     language_note: str = "",
+    provider: str = "",
 ) -> str:
     parts = [
         marker(head_sha),
-        "🤖 **AI review** — written by Claude, posted from my account. "
-        "I read it before it went up only if it says so below; treat it as a "
-        "first pass, not a verdict.",
+        f"🤖 **AI review** — written by {_provider_label(provider)}, posted from "
+        "my account. I read it before it went up only if it says so below; "
+        "treat it as a first pass, not a verdict.",
         "",
         summary_text.strip(),
         "",
@@ -209,10 +218,12 @@ def summary_body(
     return "\n".join(parts)
 
 
-def approval_body(head_sha: str, summary_text: str, coverage_note: str) -> str:
+def approval_body(
+    head_sha: str, summary_text: str, coverage_note: str, provider: str = ""
+) -> str:
     parts = [
         marker(head_sha),
-        "🤖 **AI review** — written by Claude, posted from my account.",
+        f"🤖 **AI review** — written by {_provider_label(provider)}, posted from my account.",
         "",
         summary_text.strip() or "Looks good to me.",
     ]

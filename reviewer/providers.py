@@ -20,8 +20,7 @@ reply: all of that is the same for every provider and lives in ``model.py``.
 Two rules every adapter follows, because the security properties in the README
 depend on them rather than on any one vendor's flags:
 
-*The prompt goes in on stdin.* A review bundle is tens of kilobytes and would
-run into ``ARG_MAX`` as an argument long before it ran into anything else.
+*The prompt goes in on stdin*, never as a command-line argument.
 
 *The working directory is a scratch dir, never the checkout.* All of these CLIs
 auto-load instructions from the directory they start in: ``CLAUDE.md``,
@@ -45,8 +44,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-# Tools no reviewer has any business holding. Enforced where the CLI has a flag
-# for it; where it does not, the adapter says so in ``caveat``.
 BLOCKED_TOOLS = [
     "Bash",
     "Write",
@@ -86,9 +83,7 @@ class ProviderError(RuntimeError):
 def fold_system(system_prompt: str, user_prompt: str) -> str:
     """Put the system prompt at the top of the user message.
 
-    For CLIs with no equivalent of ``--append-system-prompt``. Tagged rather
-    than merely concatenated so the boundary is legible to the model: the
-    instructions are ours, everything after them is the material under review.
+    For CLIs with no equivalent of ``--append-system-prompt``.
     """
     return (
         "<reviewer_instructions>\n"

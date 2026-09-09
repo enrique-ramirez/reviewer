@@ -6,7 +6,7 @@ say so plainly, point at what showed it, and resolve. If they are not, reply wit
 the file and line that contradicts them. If it cannot be settled from the code,
 ask one specific question.
 
-Resolving on the strength of an assertion is what this exists to prevent — the
+Resolving on the strength of an assertion is what this exists to prevent. The
 model has to be able to point at something.
 
 The round cap is per thread. One thread going in circles gets parked for a human;
@@ -67,8 +67,6 @@ def _parse(payload: dict[str, Any]) -> tuple[str, str, bool]:
     reply = str(payload.get("reply") or "").strip()
     evidence = str(payload.get("evidence") or "").strip()
 
-    # Resolving requires the model to have pointed at something. An agreement
-    # with no evidence is an opinion, and opinions do not close threads.
     resolve = verdict == VERDICT_AGREE and bool(evidence)
     if verdict == VERDICT_AGREE and not evidence:
         log.get().info("agreement without evidence — leaving the thread open")
@@ -171,12 +169,7 @@ def handle(
 def stale_thread_ids(
     snapshot: PRSnapshot, cfg: RepoConfig, resolved_by_model: set[str]
 ) -> list[str]:
-    """Our outdated threads that nobody has replied to.
-
-    An outdated thread points at lines that have since changed. With no reply to
-    weigh, the code moving on is enough to close it — it tells the author the
-    point is dealt with, and keeps the conversation list honest.
-    """
+    """Our outdated threads that nobody has replied to."""
     ids: list[str] = []
     for thread in snapshot.threads:
         if thread.is_resolved or thread.node_id in resolved_by_model:

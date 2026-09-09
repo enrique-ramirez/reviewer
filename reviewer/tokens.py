@@ -23,8 +23,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-#: English prose and source code both land near this. See the module docstring
-#: for how much precision to expect.
 CHARS_PER_TOKEN = 3.7
 
 #: Sections are separated by a blank line and a markdown heading; personality

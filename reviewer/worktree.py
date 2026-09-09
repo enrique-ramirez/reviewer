@@ -50,8 +50,7 @@ def _run(
     """Run a git command against ``repo``.
 
     Never ``cd``s and never uses a bare ``git``: every call is scoped with
-    ``-C`` so it cannot accidentally act on the wrong repository. Retries on lock
-    contention, since you may well be running a git command at the same time.
+    ``-C`` so it cannot accidentally act on the wrong repository.
     """
     cmd = ["git", "-C", str(repo), *args]
     last: subprocess.CompletedProcess[str] | None = None
@@ -87,7 +86,6 @@ def _run(
 
 WORKTREE_PREFIX = "blinky-"
 
-#: Directories an older build left behind are still ours to clean up.
 LEGACY_WORKTREE_PREFIXES = ("pr-reviewer-",)
 
 
@@ -210,11 +208,7 @@ def fetch_base_ref(repo: Path, branch: str) -> str:
 def read_trusted_files(
     repo: Path, ref: str, patterns: list[str], max_chars: int
 ) -> dict[str, str]:
-    """Read files matching ``patterns`` from ``ref`` without checking anything out.
-
-    Reads straight out of the object database, so it needs no worktree and cannot
-    see anything that is not committed at that ref.
-    """
+    """Read files matching ``patterns`` from ``ref`` without checking anything out."""
     listing = _run(repo, ["ls-tree", "-r", "--name-only", ref], check=False)
     if listing.returncode != 0:
         return {}

@@ -272,10 +272,6 @@ def default_state_dir() -> Path:
 def adopt_legacy_state_dir(state_dir: Path) -> Path | None:
     """Carry an older build's state over to the renamed directory.
 
-    The database in there is the whole history: every merge, every review, and
-    every summary already paid for. A rename that left it behind would look
-    exactly like the tool having forgotten everything.
-
     One move, only when the new directory does not exist yet, and only for the
     default location: someone who passed ``--state-dir`` meant that directory.
     Returns where it came from, so the caller can say so.
@@ -401,13 +397,7 @@ class Store:
     }
 
     def _migrate(self) -> None:
-        """Bring an older database up to the current shape.
-
-        Additive only: columns are appended, never dropped, renamed, or
-        rewritten, so an older build reading this database still works and
-        running it twice changes nothing. A column that is missing reads as
-        NULL on existing rows, which every caller already handles.
-        """
+        """Bring an older database up to the current shape."""
         added: set[str] = set()
         for table, columns in self.ADDED_COLUMNS.items():
             existing = {
@@ -421,11 +411,6 @@ class Store:
                     added.add(f"{table}.{name}")
 
         if "merged_prs.backfilled" in added:
-            # Rows written by a backfill before the column existed. They carry a
-            # signature nothing else writes (the author's title as the summary,
-            # with description retries already exhausted), and without this they
-            # would go on claiming to have merged during whichever run fetched
-            # them.
             self.conn.execute(
                 "UPDATE merged_prs SET backfilled = 1 "
                 "WHERE description_source = 'title' AND description_tries >= 99"
@@ -435,8 +420,6 @@ class Store:
 
     def close(self) -> None:
         self.conn.close()
-
-    # ---------------------------------------------------------------- HTTP
 
     def get_cached(self, url: str) -> tuple[str, Any] | None:
         row = self.conn.execute(
@@ -464,8 +447,6 @@ class Store:
             (time.time() - older_than_seconds,),
         )
         self.conn.commit()
-
-    # ------------------------------------------------------------ PR state
 
     def get_pr(self, repo: str, pr_number: int) -> PRState:
         row = self.conn.execute(
@@ -516,8 +497,6 @@ class Store:
             (repo, pr_number, last_comment_id, time.time()),
         )
         self.conn.commit()
-
-    # -------------------------------------------------------- thread state
 
     def get_thread_rounds(self, repo: str, pr_number: int, thread_id: str) -> int:
         row = self.conn.execute(
@@ -585,8 +564,6 @@ class Store:
         ).fetchone()
         return row["last_seen_comment_id"] if row else None
 
-    # ------------------------------------------------------------- board
-
     @staticmethod
     def _repo_filter(repos: list[str] | None) -> tuple[str, list[Any]]:
         """The ``WHERE repo IN (...)`` shared by every board-side query."""
@@ -650,13 +627,7 @@ class Store:
         return [int(r["pr_number"]) for r in rows]
 
     def our_board_numbers(self, repo: str) -> set[int]:
-        """Which of those we wrote ourselves.
-
-        Read while the row is still on the board, because that is the only
-        record that a pull request was ours: the reviewer never reviews its
-        owner's work, so nothing in ``review_events`` remembers it, and once it
-        merges and the board row is dropped there is nothing left to ask.
-        """
+        """Which of those we wrote ourselves."""
         rows = self.conn.execute(
             "SELECT pr_number FROM pr_view WHERE repo = ? AND is_ours = 1", (repo,)
         ).fetchall()
@@ -680,8 +651,6 @@ class Store:
             [repo, *open_numbers],
         )
         self.conn.commit()
-
-    # ------------------------------------------------------ work in flight
 
     def begin_active(self, repo: str, pr_number: int, phase: str) -> None:
         self.conn.execute(
@@ -768,8 +737,6 @@ class Store:
             for r in self.conn.execute(sql, params).fetchall()
         }
 
-    # ------------------------------------------------------- review history
-
     def record_review_event(
         self,
         repo: str,
@@ -843,10 +810,6 @@ class Store:
 
         Approval is not the bar. A PR we commented on or requested changes on
         is one we have an opinion about, and its merge is worth recording.
-
-        ``pr_state`` is consulted alongside ``review_events``, so that pull
-        requests reviewed by earlier versions of this tool, before the events
-        table existed, still count.
         """
         row = self.conn.execute(
             "SELECT 1 FROM review_events WHERE repo = ? AND pr_number = ? LIMIT 1",
@@ -867,11 +830,6 @@ class Store:
         asks this on every poll, to say how much of each repository has been
         looked at and to tell "we skipped this because nothing changed" apart
         from "we have never looked at this".
-
-        ``pr_state`` is consulted alongside ``review_events`` for the same
-        reason :meth:`has_reviewed` consults it: pull requests reviewed by
-        earlier versions of this tool, before the events table existed, still
-        count.
         """
         where, params = self._repo_filter(repos)
         joiner = " AND" if where else " WHERE"
@@ -940,8 +898,6 @@ class Store:
                 tally["last_event"] = fallback["last_review_action"]
         return tally
 
-    # ---------------------------------------------------------- merged log
-
     def is_merge_recorded(self, repo: str, pr_number: int) -> bool:
         row = self.conn.execute(
             "SELECT 1 FROM merged_prs WHERE repo = ? AND pr_number = ? LIMIT 1",
@@ -950,12 +906,7 @@ class Store:
         return row is not None
 
     def record_merged(self, row: dict[str, Any]) -> bool:
-        """File a merged pull request. Returns False if it was already filed.
-
-        ``DO NOTHING`` rather than an upsert on purpose: the description costs a
-        model call, and a second sighting of the same merge must not throw it
-        away and buy another one.
-        """
+        """File a merged pull request. Returns False if it was already filed."""
         row = dict(row)
         row.setdefault("recorded_at", time.time())
         if "labels" in row and not isinstance(row["labels"], str):
@@ -1068,16 +1019,7 @@ class Store:
         limit: int = 20,
         max_tries: int = 3,
     ) -> list[dict[str, Any]]:
-        """Merges still owed a description, oldest first.
-
-        A description can fail: the model call times out, the CLI is missing.
-        The merge is recorded either way, so these are retried on later ticks
-        and a transient failure costs a delay rather than the summary.
-
-        ``max_tries`` is what stops that retry from becoming permanent: with the
-        configured provider's CLI missing from PATH, every merge would otherwise
-        buy a failed subprocess every tick, forever.
-        """
+        """Merges still owed a description, oldest first."""
         where, params = self._merged_filters(repos, None, None)
         joiner = " AND" if where else " WHERE"
         rows = self.conn.execute(
@@ -1105,8 +1047,6 @@ class Store:
             )
             if r["author"]
         ]
-
-    # -------------------------------------------------------- backfill log
 
     def backfill_coverage(self, repo: str) -> dict[str, Any] | None:
         """What a previous backfill already covered for this repository."""
@@ -1161,8 +1101,6 @@ class Store:
             (repo, pr_number),
         ).fetchone()
         return int(row["description_tries"]) if row else 0
-
-    # ------------------------------------------------------- idempotency
 
     def already_posted(
         self, repo: str, pr_number: int, head_sha: str, kind: str = "review"

@@ -244,9 +244,6 @@ def run(
                     # this tool wrote.
                     "description": (row.get("title") or "").strip() or None,
                     "description_source": "title",
-                    # Already answered, so the tick that retries missing
-                    # descriptions leaves these alone rather than buying a model
-                    # call for every one.
                     "description_tries": 99,
                     # Not something we watched land. Without this the row would
                     # count as "merged during this run" purely because that is
@@ -310,8 +307,6 @@ class Runner:
         self._stop = threading.Event()
         self._state: dict[str, Any] = {"phase": "idle"}
 
-    # ------------------------------------------------------------- reading
-
     def status(self) -> dict[str, Any]:
         with self._lock:
             return dict(self._state)
@@ -323,8 +318,6 @@ class Runner:
     def _set(self, **fields: Any) -> None:
         with self._lock:
             self._state.update(fields)
-
-    # ------------------------------------------------------------- driving
 
     def start(self, range_key: str) -> bool:
         """Begin estimating. False if one is already under way."""
@@ -366,8 +359,6 @@ class Runner:
         if not self.busy:
             self._set(phase="idle")
 
-    # -------------------------------------------------------------- worker
-
     def _work(self, range_key: str) -> None:
         store = self.open_store()
         try:
@@ -387,8 +378,6 @@ class Runner:
                 phase="confirm", total=total, requests=requests, lines=lines
             )
 
-            # Wait for an answer. Polled rather than blocked outright so a quit
-            # while the question is on screen does not leave a thread behind.
             while not self._go.wait(0.2):
                 pass
             if self._stop.is_set():

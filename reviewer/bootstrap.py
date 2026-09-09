@@ -106,9 +106,7 @@ def _ask_provider() -> str:
     """Which coding-agent CLI does the reviewing.
 
     Whichever is already installed is offered as the default, so the common case
-    is one Enter. Nothing is rejected for not being on PATH — installing it
-    afterwards is normal, and ``--check`` is the command that has an opinion
-    about that.
+    is one Enter.
     """
     _say("  Reviews run through a coding-agent CLI you have already signed in,")
     _say("  so they cost that subscription's quota rather than an API key.")

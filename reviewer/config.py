@@ -189,11 +189,7 @@ def _strip_comments(value: Any) -> Any:
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Merge ``override`` onto a copy of ``base``.
-
-    Dicts merge key by key. Lists replace wholesale: a repo that sets
-    ``exclude`` means *that* list, not the defaults plus that list.
-    """
+    """Merge ``override`` onto a copy of ``base``."""
     result = copy.deepcopy(base)
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(result.get(key), dict):

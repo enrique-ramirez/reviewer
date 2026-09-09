@@ -54,8 +54,6 @@ def fetch_login(token: str, api_url: str, timeout: float = 15.0) -> str:
 
 def _checked(cfg: RepoConfig, login: str) -> RepoConfig:
     if not cfg.identity or cfg.identity.lower() == login.lower():
-        # Always the token's own spelling, so the board shows it the way GitHub
-        # does rather than however it was typed into a config file.
         return replace(cfg, identity=login)
     raise ConfigError(
         f'{cfg.source_file}: "identity" is {cfg.identity!r}, but the token '
@@ -68,12 +66,7 @@ def _checked(cfg: RepoConfig, login: str) -> RepoConfig:
 
 
 def resolve(repos: list[RepoConfig], global_cfg: GlobalConfig) -> list[RepoConfig]:
-    """Fill in every unset ``identity``, and verify the ones that are set.
-
-    A GitHub that cannot be reached is not fatal: an explicitly configured
-    identity still works, and one that was never set is warned about rather than
-    fabricated.
-    """
+    """Fill in every unset ``identity``, and verify the ones that are set."""
     try:
         login = fetch_login(global_cfg.token, global_cfg.api_url)
     except LookupFailed as exc:
